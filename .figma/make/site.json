@@ -1,0 +1,10 @@
+{
+  "description": "Manage horse racing staff attendance, schedules, bonuses, and withdrawals with a sleek, professional dashboard designed for efficient internal administration.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
