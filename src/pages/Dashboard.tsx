@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { EMPLOYEES, WITHDRAWALS } from '../data'
-import type { BonusRecord, Page, AttendanceRecord } from '../data'
+import { EMPLOYEES } from '../data'
+import type { BonusRecord, Page, AttendanceRecord, WithdrawalRecord } from '../data'
 
 
 const GOLD = '#c9a84c'
@@ -64,6 +64,46 @@ const TODAY_PREFIX = getTodayDate()
 export default function Dashboard({ navigate }: { navigate: (page: Page) => void }) {
   const [todayBonuses, setTodayBonuses] = useState<BonusRecord[]>([])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
+
+  useEffect(() => {
+    const loadWithdrawals = () => {
+      const saved = localStorage.getItem('babieca_withdrawals')
+
+      if (!saved) {
+        setWithdrawals([])
+        return
+      }
+
+      try {
+        const parsed = JSON.parse(saved)
+
+        setWithdrawals(
+          Array.isArray(parsed) ? parsed : []
+        )
+      } catch {
+        setWithdrawals([])
+      }
+    }
+
+    // Cargar al entrar al Dashboard
+    loadWithdrawals()
+
+    // Actualizar cuando cambien los retiros en esta misma pestaña
+    window.addEventListener('babieca_withdrawals_updated', loadWithdrawals)
+
+    // Actualizar si cambian desde otra pestaña
+    window.addEventListener('storage', loadWithdrawals)
+
+    return () => {
+      window.removeEventListener(
+        'babieca_withdrawals_updated',
+        loadWithdrawals
+      )
+
+      window.removeEventListener('storage', loadWithdrawals)
+    }
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem('babieca_daily_bonuses')
@@ -111,7 +151,7 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
 
-  const todayWithdrawals = WITHDRAWALS.filter(
+  const todayWithdrawals = withdrawals.filter(
     w => w.date.startsWith(TODAY_PREFIX)
   )
 
@@ -119,7 +159,7 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
     employee => employee.status === 'ACTIVO'
   )
 
-  const pendingWithdrawals = WITHDRAWALS.filter(
+  const pendingWithdrawals = withdrawals.filter(
     w => w.status === 'PENDIENTE'
   )
 
@@ -139,70 +179,70 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
     record => record.arrival && record.departure
   )
   const recentActivity = [
-  ...todayAttendance.flatMap(record => {
-    const employee = EMPLOYEES.find(
-      employee => employee.id === record.employeeId,
-    )
+    ...todayAttendance.flatMap(record => {
+      const employee = EMPLOYEES.find(
+        employee => employee.id === record.employeeId,
+      )
 
-    if (!employee) return []
+      if (!employee) return []
 
-    const activities = []
+      const activities = []
 
-    if (record.arrival) {
-      activities.push({
-        time: record.arrival,
-        action: 'Llegada registrada',
-        detail: `${employee.name} · ${employee.role}`,
-        dot: '#60a5fa',
-      })
-    }
+      if (record.arrival) {
+        activities.push({
+          time: record.arrival,
+          action: 'Llegada registrada',
+          detail: `${employee.name} · ${employee.role}`,
+          dot: '#60a5fa',
+        })
+      }
 
-    if (record.departure) {
-      activities.push({
-        time: record.departure,
-        action: 'Salida registrada',
-        detail: `${employee.name} · ${employee.role}${record.hours ? ` · ${record.hours}` : ''}`,
-        dot: '#34d399',
-      })
-    }
+      if (record.departure) {
+        activities.push({
+          time: record.departure,
+          action: 'Salida registrada',
+          detail: `${employee.name} · ${employee.role}${record.hours ? ` · ${record.hours}` : ''}`,
+          dot: '#34d399',
+        })
+      }
 
-    return activities
-  }),
+      return activities
+    }),
 
-  ...todayBonuses.map(bonus => ({
-    time: bonus.time || '00:00',
-    action:
-      bonus.status === 'ENTREGADO'
-        ? 'Bono entregado'
-        : 'Bono registrado',
-    detail: `${bonus.client} · ${bonus.type}${bonus.bonusAmount ? ` · ${bonus.bonusAmount}` : ''}`,
-    dot:
-      bonus.status === 'ENTREGADO'
-        ? '#34d399'
-        : GOLD,
-  })),
+    ...todayBonuses.map(bonus => ({
+      time: bonus.time || '00:00',
+      action:
+        bonus.status === 'ENTREGADO'
+          ? 'Bono entregado'
+          : 'Bono registrado',
+      detail: `${bonus.client} · ${bonus.type}${bonus.bonusAmount ? ` · ${bonus.bonusAmount}` : ''}`,
+      dot:
+        bonus.status === 'ENTREGADO'
+          ? '#34d399'
+          : GOLD,
+    })),
 
-  ...todayWithdrawals.map(withdrawal => ({
-    time: withdrawal.date.includes(' ')
-      ? withdrawal.date.split(' ')[1]
-      : '00:00',
-    action:
-      withdrawal.status === 'PAGADO'
-        ? 'Retiro pagado'
-        : withdrawal.status === 'RECHAZADO'
-          ? 'Retiro rechazado'
-          : 'Retiro pendiente',
-    detail: `Retiro · ${withdrawal.client} · ${withdrawal.amount}`,
-    dot:
-      withdrawal.status === 'PAGADO'
-        ? '#34d399'
-        : withdrawal.status === 'RECHAZADO'
-          ? '#f87171'
-          : '#fbbf24',
-  })),
-]
-  .sort((a, b) => b.time.localeCompare(a.time))
-  .slice(0, 10)
+    ...todayWithdrawals.map(withdrawal => ({
+      time: withdrawal.date.includes(' ')
+        ? withdrawal.date.split(' ')[1]
+        : '00:00',
+      action:
+        withdrawal.status === 'PAGADO'
+          ? 'Retiro pagado'
+          : withdrawal.status === 'RECHAZADO'
+            ? 'Retiro rechazado'
+            : 'Retiro pendiente',
+      detail: `Retiro · ${withdrawal.client} · ${withdrawal.amount}`,
+      dot:
+        withdrawal.status === 'PAGADO'
+          ? '#34d399'
+          : withdrawal.status === 'RECHAZADO'
+            ? '#f87171'
+            : '#fbbf24',
+    })),
+  ]
+    .sort((a, b) => b.time.localeCompare(a.time))
+    .slice(0, 10)
   const quickLinks: { icon: string; label: string; page: Page }[] = [
     { icon: '👥', label: 'Empleados', page: 'employees' },
     { icon: '🕐', label: 'Horarios', page: 'schedules' },
@@ -217,7 +257,7 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
         <h2 className="text-2xl text-zinc-100" style={{ fontFamily: 'DM Serif Display, Georgia, serif' }}>
           {greeting}, Joseph
         </h2>
-        <p className="text-sm text-zinc-600 mt-0.5">Sábado, 5 de septiembre de 2026</p>
+        <p className="text-sm text-zinc-600 mt-0.5 capitalize">{new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', })}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

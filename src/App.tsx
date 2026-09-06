@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Dashboard from './pages/Dashboard'
 import Employees from './pages/Employees'
 import Schedules from './pages/Schedules'
@@ -32,7 +32,26 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
 
-  const today = new Date(2026, 8, 5).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', })
+  const [currentTime, setCurrentTime] = useState(
+    new Date().toLocaleTimeString('es-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  )
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(
+        new Date().toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      )
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [])
+
 
   const renderPage = () => {
     switch (currentPage) {
@@ -127,7 +146,7 @@ export default function App() {
 
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-zinc-200">{PAGE_TITLES[currentPage]}</h1>
-            <p className="text-xs hidden sm:block capitalize" style={{ color: '#52525b' }}>{today}</p>
+            <p className="text-xs hidden sm:block capitalize" style={{ color: '#52525b' }}>{today} · {currentTime}</p>
           </div>
 
           <div className="flex items-center gap-2">

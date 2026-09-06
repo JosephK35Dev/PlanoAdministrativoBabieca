@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { EMPLOYEES, ATTENDANCE_RECORDS, SCHEDULE, } from '../data'
+import { EMPLOYEES, ATTENDANCE_RECORDS, WEEKLY_SCHEDULES, } from '../data'
 import type { Employee, EmployeeStatus, AttendanceRecord, JornadaStatus } from '../data'
 
 const GOLD = '#c9a84c'
@@ -104,6 +104,7 @@ function Avatar({
   )
 }
 
+
 function getTodayDate() {
   const now = new Date()
 
@@ -159,35 +160,53 @@ function Modal({
 export default function Employees() {
 
   const getEffectiveSchedule = (employeeId: string) => {
-    const saved = localStorage.getItem('babieca_schedules')
+  const saved = localStorage.getItem('babieca_schedules')
 
-    if (saved) {
-      try {
-        const schedules = JSON.parse(saved)
+  const today = new Date()
+  const day = today.getDay()
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1)
 
-        const today = new Date()
-        const day = today.getDay()
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1)
+  const weekStart = new Date(today)
+  weekStart.setDate(diff)
+  weekStart.setHours(0, 0, 0, 0)
 
-        const weekStart = new Date(today)
-        weekStart.setDate(diff)
-        weekStart.setHours(0, 0, 0, 0)
+  const weekKey = weekStart.toISOString().slice(0, 10)
 
-        const weekKey = weekStart.toISOString().slice(0, 10)
+  // 1. Primero: horario modificado manualmente para esta semana
+  if (saved) {
+    try {
+      const schedules = JSON.parse(saved)
+      const override = schedules[employeeId]?.[weekKey]
 
-        const override = schedules[employeeId]?.[weekKey]
-
-        if (override) {
-          return override
-        }
-      } catch {
-        // Si hay un problema con localStorage,
-        // usamos el horario base.
+      if (override) {
+        return override
       }
+    } catch {
+      // Si localStorage falla, continuamos con la rotación
     }
-
-    return SCHEDULE[employeeId] || Array(7).fill('—')
   }
+
+  // 2. Horario de la rotación semanal
+  const rotations = WEEKLY_SCHEDULES[employeeId]
+
+  if (!rotations || rotations.length === 0) {
+    return Array(7).fill('—')
+  }
+
+  // La rotación comienza en la semana del 31/08/2026
+  const rotationAnchor = new Date('2026-08-31T00:00:00')
+
+  const weeksSinceAnchor = Math.floor(
+    (weekStart.getTime() - rotationAnchor.getTime()) /
+      (7 * 24 * 60 * 60 * 1000)
+  )
+
+  const rotationIndex =
+    ((weeksSinceAnchor % rotations.length) + rotations.length) %
+    rotations.length
+
+  return rotations[rotationIndex]
+}
   const [employees, setEmployees] = useState<Employee[]>(EMPLOYEES)
 
   const [attendance, setAttendance] =
@@ -895,6 +914,10 @@ export default function Employees() {
 
               <option value="JORNADA_FINALIZADA">
                 Jornada finalizada
+              </option>
+
+              <option value="FUERA_DE_TURNO">
+                Fuera de turno
               </option>
             </select>
 

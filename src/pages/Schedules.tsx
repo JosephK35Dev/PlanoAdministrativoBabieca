@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { EMPLOYEES, SCHEDULE, TEMPORARY_WEEKLY_SCHEDULES, } from '../data'
+import { EMPLOYEES, WEEKLY_SCHEDULES, } from '../data'
 
 const GOLD = '#c9a84c'
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -62,29 +62,34 @@ export default function Schedules() {
   })()
 
   const getSchedule = (empId: string) => {
-    const weekKey = weekStart.toISOString().slice(0, 10)
+  const weekKey = weekStart.toISOString().slice(0, 10)
 
-    // Si existe una modificación específica para esta semana,
-    // tiene prioridad.
-    if (overrides[empId]?.[weekKey]) {
-      return overrides[empId][weekKey]
-    }
-
-
-
-    // Rotación temporal para los demás empleados.
-    const rotations = TEMPORARY_WEEKLY_SCHEDULES[empId]
-
-    if (rotations) {
-      const rotationIndex =
-        ((weekOffset % rotations.length) + rotations.length) %
-        rotations.length
-
-      return rotations[rotationIndex]
-    }
-
-    return SCHEDULE[empId] || Array(7).fill('—')
+  // Si existe una modificación específica para esta semana,
+  // tiene prioridad sobre la rotación.
+  if (overrides[empId]?.[weekKey]) {
+    return overrides[empId][weekKey]
   }
+
+  const rotations = WEEKLY_SCHEDULES[empId]
+
+  if (!rotations || rotations.length === 0) {
+    return Array(7).fill('—')
+  }
+
+  // La rotación comienza en la semana del 31/08/2026.
+  // Cada nueva semana avanza automáticamente a la siguiente.
+  const rotationAnchor = new Date('2026-08-31T00:00:00')
+  const weeksSinceAnchor = Math.floor(
+    (weekStart.getTime() - rotationAnchor.getTime()) /
+      (7 * 24 * 60 * 60 * 1000)
+  )
+
+  const rotationIndex =
+    ((weeksSinceAnchor % rotations.length) + rotations.length) %
+    rotations.length
+
+  return rotations[rotationIndex]
+}
   const handleAdd = () => {
     if (!form.empId) return
     const dayIdx = parseInt(form.dayIdx)

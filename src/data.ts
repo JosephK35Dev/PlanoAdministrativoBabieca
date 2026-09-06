@@ -64,10 +64,11 @@ export interface WithdrawalRecord {
   id: string
   client: string
   amount: number
+  country: string
   date: string
   status: WithdrawalStatus
   responsible: string
-  method: string
+  rejectionReason?: string
 }
 
 /*
@@ -277,60 +278,7 @@ export const ATTENDANCE_RECORDS: AttendanceRecord[] = [
 */
 
 export const WITHDRAWALS: WithdrawalRecord[] = [
-  {
-    id: 'R001',
-    client: 'Andrés Romero',
-    amount: 350,
-    date: '05/09/2026 10:05',
-    status: 'PENDIENTE',
-    responsible: 'Carlos Méndez',
-    method: 'Transferencia',
-  },
-  {
-    id: 'R002',
-    client: 'Valentina Cruz',
-    amount: 1200,
-    date: '05/09/2026 09:30',
-    status: 'PAGADO',
-    responsible: 'Ana García',
-    method: 'Efectivo',
-  },
-  {
-    id: 'R003',
-    client: 'Héctor Jiménez',
-    amount: 500,
-    date: '05/09/2026 11:45',
-    status: 'PENDIENTE',
-    responsible: 'Ana García',
-    method: 'Transferencia',
-  },
-  {
-    id: 'R004',
-    client: 'Isabela Flores',
-    amount: 750,
-    date: '04/09/2026 16:20',
-    status: 'RECHAZADO',
-    responsible: 'Carlos Méndez',
-    method: 'Transferencia',
-  },
-  {
-    id: 'R005',
-    client: 'Pablo Guerrero',
-    amount: 200,
-    date: '04/09/2026 14:55',
-    status: 'PAGADO',
-    responsible: 'Luis Torres',
-    method: 'Efectivo',
-  },
-  {
-    id: 'R006',
-    client: 'Natalia Herrera',
-    amount: 900,
-    date: '05/09/2026 08:15',
-    status: 'PAGADO',
-    responsible: 'Carlos Méndez',
-    method: 'Transferencia',
-  },
+  
 ]
 
 /*
@@ -344,59 +292,8 @@ export const WITHDRAWALS: WithdrawalRecord[] = [
 |
 */
 
-export const SCHEDULE: Record<string, string[]> = {
-  '001': [
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    'DESCANSO',
-    'DESCANSO',
-  ],
 
-  '002': [
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–16:00',
-    '08:00–14:00',
-    'DESCANSO',
-  ],
-
-  '003': [
-    '09:00–17:00',
-    '09:00–17:00',
-    '09:00–17:00',
-    '09:00–17:00',
-    'DESCANSO',
-    '09:00–17:00',
-    'DESCANSO',
-  ],
-
-  '004': [
-    '07:00–15:00',
-    '07:00–15:00',
-    '07:00–15:00',
-    'DESCANSO',
-    '07:00–15:00',
-    '07:00–15:00',
-    'DESCANSO',
-  ],
-
-  '005': [
-    '07:00–15:00',
-    '07:00–15:00',
-    '07:00–15:00',
-    '07:00–15:00',
-    '07:00–15:00',
-    'DESCANSO',
-    'DESCANSO',
-  ],
-}
-
-export const TEMPORARY_WEEKLY_SCHEDULES: Record<string, string[][]> = {
+export const WEEKLY_SCHEDULES: Record<string, string[][]> = {
   '001': [
     ['08:00–16:00', '08:00–16:00', '08:00–16:00', '08:00–16:00', '08:00–16:00', 'DESCANSO', 'DESCANSO'],
     ['09:00–17:00', '09:00–17:00', '09:00–17:00', '09:00–17:00', '09:00–17:00', 'DESCANSO', 'DESCANSO'],
@@ -434,16 +331,5 @@ export const TEMPORARY_WEEKLY_SCHEDULES: Record<string, string[][]> = {
 |--------------------------------------------------------------------------
 */
 
-export const BONUS_TYPES = [
-  'Bono de Bienvenida',
-  'Bono de Recarga',
-  'Bono de Fidelidad',
-  'Bono VIP',
-  'Bono Especial',
-]
 
-export const WITHDRAWAL_METHODS = [
-  'Transferencia',
-  'Efectivo',
-  'Bizum',
-]
+
