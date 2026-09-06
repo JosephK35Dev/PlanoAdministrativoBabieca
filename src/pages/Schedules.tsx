@@ -23,12 +23,34 @@ function fmtDate(date: Date) {
   return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })
 }
 
-const TODAY = new Date(2026, 8, 5)
+const TODAY = new Date()
 
 export default function Schedules() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [addModal, setAddModal] = useState(false)
-  const [overrides, setOverrides] = useState<Record<string, Record<string, string[]>>>({})
+  const [overrides, setOverrides] =
+    useState<Record<string, Record<string, string[]>>>(() => {
+      const saved = localStorage.getItem('babieca_schedules')
+
+      if (!saved) return {}
+
+      try {
+        return JSON.parse(saved)
+      } catch {
+        return {}
+      }
+    })
+
+  const saveOverrides = (
+    updated: Record<string, Record<string, string[]>>
+  ) => {
+    setOverrides(updated)
+    localStorage.setItem(
+      'babieca_schedules',
+      JSON.stringify(updated)
+    )
+  }
+
   const [form, setForm] = useState({ empId: '', dayIdx: '0', start: '08:00', end: '16:00', special: '' })
 
   const weekStart = addDays(getWeekStart(TODAY), weekOffset * 7)
@@ -48,7 +70,7 @@ export default function Schedules() {
       return overrides[empId][weekKey]
     }
 
-    
+
 
     // Rotación temporal para los demás empleados.
     const rotations = TEMPORARY_WEEKLY_SCHEDULES[empId]
@@ -67,26 +89,26 @@ export default function Schedules() {
     if (!form.empId) return
     const dayIdx = parseInt(form.dayIdx)
     const value = form.special || `${form.start}–${form.end}`
-    setOverrides(prev => {
-      const weekKey = weekStart.toISOString().slice(0, 10)
+    const weekKey = weekStart.toISOString().slice(0, 10)
 
-      const current = [
-        ...(prev[form.empId]?.[weekKey] || getSchedule(form.empId)),
-      ]
+    const current = [
+      ...(overrides[form.empId]?.[weekKey] || getSchedule(form.empId)),
+    ]
 
-      current[dayIdx] = value
+    current[dayIdx] = value
 
-      return {
-        ...prev,
-        [form.empId]: {
-          ...prev[form.empId],
-          [weekKey]: current,
-        },
-      }
-    })
+    const updated = {
+      ...overrides,
+      [form.empId]: {
+        ...overrides[form.empId],
+        [weekKey]: current,
+      },
+    }
+
+    saveOverrides(updated)
     setAddModal(false)
   }
-  
+
 
   const getCellColor = (value: string) => {
     if (value === 'DESCANSO') return '#52525b'

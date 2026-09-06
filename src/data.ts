@@ -38,12 +38,24 @@ export interface AttendanceRecord {
   notes: string
 }
 
+export type BonusKind =
+  | 'PORCENTAJE'
+  | 'GIROS'
+  | 'DEPORTIVA'
+  | 'HIPISMO'
+
 export interface BonusRecord {
   id: string
   client: string
+  step: number
   type: string
-  amount: number
+  kind: BonusKind
+  rechargeAmount?: number
+  percentage?: number
+  bonusAmount?: number
+  rollover?: string
   date: string
+  time: string
   status: BonusStatus
   responsible: string
 }
@@ -255,63 +267,6 @@ export const ATTENDANCE_RECORDS: AttendanceRecord[] = [
 |
 */
 
-export const BONUSES: BonusRecord[] = [
-  {
-    id: 'B001',
-    client: 'Juan Pérez',
-    type: 'Bono de Bienvenida',
-    amount: 50,
-    date: '05/09/2026 10:23',
-    status: 'ENTREGADO',
-    responsible: 'Ana García',
-  },
-  {
-    id: 'B002',
-    client: 'Sofía López',
-    type: 'Bono de Recarga',
-    amount: 100,
-    date: '05/09/2026 09:45',
-    status: 'ENTREGADO',
-    responsible: 'Carlos Méndez',
-  },
-  {
-    id: 'B003',
-    client: 'Miguel Hernández',
-    type: 'Bono de Fidelidad',
-    amount: 75,
-    date: '05/09/2026 11:10',
-    status: 'ENTREGADO',
-    responsible: 'Ana García',
-  },
-  {
-    id: 'B004',
-    client: 'Laura Martínez',
-    type: 'Bono de Recarga',
-    amount: 50,
-    date: '04/09/2026 15:30',
-    status: 'ENTREGADO',
-    responsible: 'Luis Torres',
-  },
-  {
-    id: 'B005',
-    client: 'Fernando Díaz',
-    type: 'Bono VIP',
-    amount: 200,
-    date: '04/09/2026 14:00',
-    status: 'CANCELADO',
-    responsible: 'Carlos Méndez',
-  },
-  {
-    id: 'B006',
-    client: 'Carmen Sánchez',
-    type: 'Bono de Bienvenida',
-    amount: 50,
-    date: '05/09/2026 08:50',
-    status: 'ENTREGADO',
-    responsible: 'Carlos Méndez',
-  },
-]
-
 /*
 |--------------------------------------------------------------------------
 | RETIROS
@@ -461,16 +416,16 @@ export const TEMPORARY_WEEKLY_SCHEDULES: Record<string, string[][]> = {
   ],
 
   '004': [
-    ['DESCANSO',    '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00',  '08:00–22:00',  '08:00–22:00',],
-    ['DESCANSO',    '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00',  '08:00–22:00',  '08:00–22:00',],
-    ['DESCANSO',    '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00',  '08:00–22:00',  '08:00–22:00',],
-    ],
+    ['DESCANSO', '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00', '08:00–22:00', '08:00–22:00',],
+    ['DESCANSO', '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00', '08:00–22:00', '08:00–22:00',],
+    ['DESCANSO', '18:00–22:00', '18:00–22:00', '18:00–22:00', '18:00–22:00', '08:00–22:00', '08:00–22:00',],
+  ],
 
   '005': [
     ['18:00–22:00', 'DESCANSO', 'DESCANSO', 'DESCANSO', 'DESCANSO', '08:00–18:00', '08:00–18:00',],
     ['18:00–22:00', 'DESCANSO', 'DESCANSO', 'DESCANSO', 'DESCANSO', '08:00–18:00', '08:00–18:00',],
     ['18:00–22:00', 'DESCANSO', 'DESCANSO', 'DESCANSO', 'DESCANSO', '08:00–18:00', '08:00–18:00',],
-    ],
+  ],
 }
 
 /*

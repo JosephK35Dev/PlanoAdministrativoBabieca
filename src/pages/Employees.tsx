@@ -157,10 +157,65 @@ function Modal({
   )
 }
 export default function Employees() {
+
+  const getEffectiveSchedule = (employeeId: string) => {
+    const saved = localStorage.getItem('babieca_schedules')
+
+    if (saved) {
+      try {
+        const schedules = JSON.parse(saved)
+
+        const today = new Date()
+        const day = today.getDay()
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1)
+
+        const weekStart = new Date(today)
+        weekStart.setDate(diff)
+        weekStart.setHours(0, 0, 0, 0)
+
+        const weekKey = weekStart.toISOString().slice(0, 10)
+
+        const override = schedules[employeeId]?.[weekKey]
+
+        if (override) {
+          return override
+        }
+      } catch {
+        // Si hay un problema con localStorage,
+        // usamos el horario base.
+      }
+    }
+
+    return SCHEDULE[employeeId] || Array(7).fill('—')
+  }
   const [employees, setEmployees] = useState<Employee[]>(EMPLOYEES)
 
   const [attendance, setAttendance] =
-    useState<AttendanceRecord[]>(ATTENDANCE_RECORDS)
+    useState<AttendanceRecord[]>(() => {
+      const saved = localStorage.getItem('babieca_attendance')
+
+      if (!saved) {
+        return ATTENDANCE_RECORDS
+      }
+
+      try {
+        return JSON.parse(saved)
+      } catch {
+        return ATTENDANCE_RECORDS
+      }
+    })
+
+  const saveAttendance = (
+    updated: AttendanceRecord[],
+  ) => {
+    setAttendance(updated)
+
+    localStorage.setItem(
+      'babieca_attendance',
+      JSON.stringify(updated),
+    )
+  }
+
 
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] =
@@ -204,7 +259,7 @@ export default function Employees() {
   ): JornadaStatus => {
     const record = getTodayAttendance(employeeId)
 
-    const schedule = SCHEDULE[employeeId]
+    const schedule = getEffectiveSchedule(employeeId)
 
     // Día de la semana actual
     const dayOfWeek = new Date().getDay()
@@ -361,17 +416,17 @@ export default function Employees() {
       getTodayAttendance(selectedEmp.id)
 
     if (existing) {
-      setAttendance(prev =>
-        prev.map(record =>
-          record.id === existing.id
-            ? {
-              ...record,
-              arrival: arrivalTime,
-              notes: arrivalObs,
-            }
-            : record,
-        ),
+      const updated = attendance.map(record =>
+        record.id === existing.id
+          ? {
+            ...record,
+            arrival: arrivalTime,
+            notes: arrivalObs,
+          }
+          : record,
       )
+
+      saveAttendance(updated)
     } else {
       const newRecord: AttendanceRecord = {
         id: `A${Date.now()}`,
@@ -381,10 +436,12 @@ export default function Employees() {
         notes: arrivalObs,
       }
 
-      setAttendance(prev => [
+      const updated = [
         newRecord,
-        ...prev,
-      ])
+        ...attendance,
+      ]
+
+      saveAttendance(updated)
     }
 
     closeArrivalModal()
@@ -403,18 +460,18 @@ export default function Employees() {
       departureTime,
     )
 
-    setAttendance(prev =>
-      prev.map(record =>
-        record.id === existing.id
-          ? {
-            ...record,
-            departure: departureTime,
-            hours,
-            notes: departureObs,
-          }
-          : record,
-      ),
+    const updated = attendance.map(record =>
+      record.id === existing.id
+        ? {
+          ...record,
+          departure: departureTime,
+          hours,
+          notes: departureObs,
+        }
+        : record,
     )
+
+    saveAttendance(updated)
 
     closeDepartureModal()
   }

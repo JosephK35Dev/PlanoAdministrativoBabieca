@@ -173,6 +173,7 @@ function formatMoney(value: number) {
 export default function Bonuses() {
   const [records, setRecords] = useState<BonusRecord[]>([])
   const [client, setClient] = useState('')
+  const [storageReady, setStorageReady] = useState(false)
 
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -190,12 +191,11 @@ export default function Bonuses() {
    * Cargar bonos del día
    */
   useEffect(() => {
-    const saved = localStorage.getItem(
-      'babieca_daily_bonuses',
-    )
+    const saved = localStorage.getItem('babieca_daily_bonuses')
 
     if (!saved) {
       setRecords([])
+      setStorageReady(true)
       return
     }
 
@@ -203,7 +203,7 @@ export default function Bonuses() {
       const parsed = JSON.parse(saved)
 
       if (parsed.date === todayKey) {
-        setRecords(parsed.records || [])
+        setRecords(Array.isArray(parsed.records) ? parsed.records : [])
       } else {
         localStorage.setItem(
           'babieca_daily_bonuses',
@@ -216,14 +216,19 @@ export default function Bonuses() {
         setRecords([])
       }
     } catch {
+      localStorage.removeItem('babieca_daily_bonuses')
       setRecords([])
     }
+
+    setStorageReady(true)
   }, [todayKey])
 
   /*
-   * Guardar cada cambio
+   * Guardar bonos
    */
   useEffect(() => {
+    if (!storageReady) return
+
     localStorage.setItem(
       'babieca_daily_bonuses',
       JSON.stringify({
@@ -231,8 +236,7 @@ export default function Bonuses() {
         records,
       }),
     )
-  }, [records, todayKey])
-
+  }, [records, todayKey, storageReady])
   /*
    * Reinicio automático al cambiar de día.
    * Revisamos cada minuto.
@@ -328,16 +332,22 @@ export default function Bonuses() {
       type: selectedOption.label,
       kind: selectedOption.kind,
       rechargeAmount:
-        selectedOption.kind === 'GIROS'
-          ? undefined
-          : amount,
+        selectedOption.kind === 'PORCENTAJE' ||
+          selectedOption.kind === 'HIPISMO'
+          ? amount
+          : undefined,
       percentage:
         selectedOption.percentage,
       bonusAmount,
       rollover: selectedOption.rollover,
       date: todayKey,
+      time: new Date().toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
       status: 'ENTREGADO',
       responsible: 'Usuario actual',
+
     }
 
     setRecords(prev => [newRecord, ...prev])
@@ -521,12 +531,8 @@ export default function Bonuses() {
 
                     <td className="px-5 py-4 text-zinc-300">
                       {record.bonusAmount
-                        ? formatMoney(
-                          record.bonusAmount,
-                        )
-                        : record.kind === 'GIROS'
-                          ? record.type
-                          : '—'}
+                        ? formatMoney(record.bonusAmount)
+                        : record.type}
                     </td>
 
                     <td className="px-5 py-4 text-zinc-400">
@@ -691,7 +697,9 @@ export default function Bonuses() {
                 onClick={handleAssignBonus}
                 disabled={
                   !selectedOption ||
-                  (selectedOption.kind !== 'GIROS' &&
+                  (
+                    (selectedOption.kind === 'PORCENTAJE' ||
+                      selectedOption.kind === 'HIPISMO') &&
                     (!rechargeAmount ||
                       Number(rechargeAmount) <= 0))
                 }

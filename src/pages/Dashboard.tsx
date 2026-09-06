@@ -1,5 +1,7 @@
-import { EMPLOYEES, BONUSES, WITHDRAWALS } from '../data'
-import type { Page } from '../data'
+import { useEffect, useState } from 'react'
+import { EMPLOYEES, WITHDRAWALS } from '../data'
+import type { BonusRecord, Page, AttendanceRecord } from '../data'
+
 
 const GOLD = '#c9a84c'
 
@@ -41,33 +43,166 @@ function DayStatusRow({ label, value, variant }: {
   )
 }
 
-const TODAY_PREFIX = '05/09/2026'
+function getTodayKey() {
+  const now = new Date()
+
+  return `${now.getFullYear()}-${String(
+    now.getMonth() + 1,
+  ).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+const getTodayDate = () => {
+  const now = new Date()
+
+  return `${String(now.getDate()).padStart(2, '0')}/${String(
+    now.getMonth() + 1,
+  ).padStart(2, '0')}/${now.getFullYear()}`
+}
+
+const TODAY_PREFIX = getTodayDate()
 
 export default function Dashboard({ navigate }: { navigate: (page: Page) => void }) {
+  const [todayBonuses, setTodayBonuses] = useState<BonusRecord[]>([])
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('babieca_daily_bonuses')
+
+    if (!saved) {
+      setTodayBonuses([])
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(saved)
+
+      if (parsed.date === getTodayKey()) {
+        setTodayBonuses(parsed.records || [])
+      } else {
+        setTodayBonuses([])
+      }
+    } catch {
+      setTodayBonuses([])
+    }
+  }, [])
+
+  useEffect(() => {
+    const saved = localStorage.getItem('babieca_attendance')
+
+    if (!saved) {
+      setAttendance([])
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(saved)
+
+      setAttendance(
+        Array.isArray(parsed) ? parsed : []
+      )
+    } catch {
+      setAttendance([])
+    }
+  }, [])
+
+  const todayAttendance = attendance.filter(
+    record => record.date === TODAY_PREFIX
+  )
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches'
 
-  const todayBonuses = BONUSES.filter(b => b.date.startsWith(TODAY_PREFIX))
-  const todayWithdrawals = WITHDRAWALS.filter(w => w.date.startsWith(TODAY_PREFIX))
-  const activeEmployees = EMPLOYEES.filter(e => e.status !== 'AUSENTE')
-  const onShift = EMPLOYEES.filter(e => e.status === 'EN_TURNO')
-  const pendingBonuses = BONUSES.filter(b => b.status === 'PENDIENTE')
-  const pendingWithdrawals = WITHDRAWALS.filter(w => w.status === 'PENDIENTE')
-  const sinLlegada = EMPLOYEES.filter(e => e.status === 'SIN_LLEGADA')
-  const ausentes = EMPLOYEES.filter(e => e.status === 'AUSENTE')
-  const finalizados = EMPLOYEES.filter(e => e.status === 'JORNADA_FINALIZADA')
+  const todayWithdrawals = WITHDRAWALS.filter(
+    w => w.date.startsWith(TODAY_PREFIX)
+  )
 
+  const activeEmployees = EMPLOYEES.filter(
+    employee => employee.status === 'ACTIVO'
+  )
+
+  const pendingWithdrawals = WITHDRAWALS.filter(
+    w => w.status === 'PENDIENTE'
+  )
+
+  const onShift = todayAttendance.filter(
+    record => record.arrival && !record.departure
+  )
+
+  const sinLlegada = EMPLOYEES.filter(
+    employee =>
+      employee.status === 'ACTIVO' &&
+      !todayAttendance.some(
+        record => record.employeeId === employee.id
+      )
+  )
+
+  const finalizados = todayAttendance.filter(
+    record => record.arrival && record.departure
+  )
   const recentActivity = [
-    { time: '11:45', action: 'Bono registrado', detail: 'Bono de Fidelidad · Miguel Hernández · €75', dot: GOLD },
-    { time: '11:10', action: 'Retiro pendiente', detail: 'Retiro · Héctor Jiménez · €500', dot: '#fbbf24' },
-    { time: '10:23', action: 'Bono registrado', detail: 'Bono de Bienvenida · Juan Pérez · €50', dot: GOLD },
-    { time: '10:05', action: 'Retiro pendiente', detail: 'Retiro · Andrés Romero · €350', dot: '#fbbf24' },
-    { time: '09:30', action: 'Retiro pagado', detail: 'Retiro · Valentina Cruz · €1.200', dot: '#34d399' },
-    { time: '09:10', action: 'Llegada registrada', detail: 'Ana García · Cajera', dot: '#60a5fa' },
-    { time: '08:45', action: 'Bono entregado', detail: 'Bono de Recarga · Sofía López · €100', dot: '#34d399' },
-    { time: '08:02', action: 'Llegada registrada', detail: 'Carlos Méndez · Supervisor', dot: '#60a5fa' },
-  ]
+  ...todayAttendance.flatMap(record => {
+    const employee = EMPLOYEES.find(
+      employee => employee.id === record.employeeId,
+    )
 
+    if (!employee) return []
+
+    const activities = []
+
+    if (record.arrival) {
+      activities.push({
+        time: record.arrival,
+        action: 'Llegada registrada',
+        detail: `${employee.name} · ${employee.role}`,
+        dot: '#60a5fa',
+      })
+    }
+
+    if (record.departure) {
+      activities.push({
+        time: record.departure,
+        action: 'Salida registrada',
+        detail: `${employee.name} · ${employee.role}${record.hours ? ` · ${record.hours}` : ''}`,
+        dot: '#34d399',
+      })
+    }
+
+    return activities
+  }),
+
+  ...todayBonuses.map(bonus => ({
+    time: bonus.time || '00:00',
+    action:
+      bonus.status === 'ENTREGADO'
+        ? 'Bono entregado'
+        : 'Bono registrado',
+    detail: `${bonus.client} · ${bonus.type}${bonus.bonusAmount ? ` · ${bonus.bonusAmount}` : ''}`,
+    dot:
+      bonus.status === 'ENTREGADO'
+        ? '#34d399'
+        : GOLD,
+  })),
+
+  ...todayWithdrawals.map(withdrawal => ({
+    time: withdrawal.date.includes(' ')
+      ? withdrawal.date.split(' ')[1]
+      : '00:00',
+    action:
+      withdrawal.status === 'PAGADO'
+        ? 'Retiro pagado'
+        : withdrawal.status === 'RECHAZADO'
+          ? 'Retiro rechazado'
+          : 'Retiro pendiente',
+    detail: `Retiro · ${withdrawal.client} · ${withdrawal.amount}`,
+    dot:
+      withdrawal.status === 'PAGADO'
+        ? '#34d399'
+        : withdrawal.status === 'RECHAZADO'
+          ? '#f87171'
+          : '#fbbf24',
+  })),
+]
+  .sort((a, b) => b.time.localeCompare(a.time))
+  .slice(0, 10)
   const quickLinks: { icon: string; label: string; page: Page }[] = [
     { icon: '👥', label: 'Empleados', page: 'employees' },
     { icon: '🕐', label: 'Horarios', page: 'schedules' },
@@ -80,13 +215,13 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h2 className="text-2xl text-zinc-100" style={{ fontFamily: 'DM Serif Display, Georgia, serif' }}>
-          {greeting}, Carlos
+          {greeting}, Joseph
         </h2>
         <p className="text-sm text-zinc-600 mt-0.5">Sábado, 5 de septiembre de 2026</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon="🎁" label="Bonos de hoy" value={todayBonuses.length} sub={`${pendingBonuses.length} pendientes`} />
+        <StatCard icon="🎁" label="Bonos de hoy" value={todayBonuses.length} sub={`${todayBonuses.length} `} />
         <StatCard icon="💰" label="Retiros de hoy" value={todayWithdrawals.length} sub={`${pendingWithdrawals.length} pendientes`} />
         <StatCard icon="👥" label="Personal activo" value={activeEmployees.length} sub="de 8 total" />
         <StatCard icon="🕐" label="En turno ahora" value={onShift.length} sub="empleados activos" accent />
@@ -99,11 +234,9 @@ export default function Dashboard({ navigate }: { navigate: (page: Page) => void
               <h3 className="text-sm font-semibold text-zinc-100">Estado del día</h3>
             </div>
             <div className="divide-y divide-zinc-800/60">
-              <DayStatusRow label="Bonos pendientes" value={pendingBonuses.length} variant={pendingBonuses.length > 0 ? 'warn' : 'ok'} />
               <DayStatusRow label="Retiros pendientes" value={pendingWithdrawals.length} variant={pendingWithdrawals.length > 0 ? 'warn' : 'ok'} />
               <DayStatusRow label="Empleados en turno" value={onShift.length} variant="ok" />
               <DayStatusRow label="Sin llegada" value={sinLlegada.length} variant={sinLlegada.length > 0 ? 'warn' : 'ok'} />
-              <DayStatusRow label="Ausentes" value={ausentes.length} variant={ausentes.length > 0 ? 'danger' : 'ok'} />
               <DayStatusRow label="Jornadas finalizadas" value={finalizados.length} variant="neutral" />
             </div>
           </div>
