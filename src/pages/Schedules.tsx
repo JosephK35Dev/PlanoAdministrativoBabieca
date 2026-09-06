@@ -1,8 +1,22 @@
-import { useState } from 'react'
-import { EMPLOYEES, WEEKLY_SCHEDULES, } from '../data'
+import { useEffect, useState } from 'react'
+import { supabase } from '../SupabaseClient'
+import type { Employee } from '../data'
 
 const GOLD = '#c9a84c'
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+type Schedule = {
+  id: number
+  employee_id: string
+  week_number: number
+  monday: string
+  tuesday: string
+  wednesday: string
+  thursday: string
+  friday: string
+  saturday: string
+  sunday: string
+}
 
 function getWeekStart(date: Date) {
   const d = new Date(date)
@@ -27,29 +41,54 @@ const TODAY = new Date()
 
 export default function Schedules() {
   const [weekOffset, setWeekOffset] = useState(0)
-  const [addModal, setAddModal] = useState(false)
-  const [overrides, setOverrides] =
-    useState<Record<string, Record<string, string[]>>>(() => {
-      const saved = localStorage.getItem('babieca_schedules')
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [loading, setLoading] = useState(true)
 
-      if (!saved) return {}
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true)
 
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return {}
+      const [
+        { data: employeesData, error: employeesError },
+        { data: schedulesData, error: schedulesError },
+      ] = await Promise.all([
+        supabase
+          .from('employees')
+          .select('*')
+          .order('id'),
+
+        supabase
+          .from('schedules')
+          .select('*')
+          .order('employee_id')
+          .order('week_number'),
+      ])
+
+      if (employeesError) {
+        console.error(
+          'Error cargando empleados:',
+          employeesError,
+        )
       }
-    })
 
-  const saveOverrides = (
-    updated: Record<string, Record<string, string[]>>
-  ) => {
-    setOverrides(updated)
-    localStorage.setItem(
-      'babieca_schedules',
-      JSON.stringify(updated)
-    )
-  }
+      if (schedulesError) {
+        console.error(
+          'Error cargando horarios:',
+          schedulesError,
+        )
+      }
+
+      setEmployees((employeesData || []) as Employee[])
+      setSchedules((schedulesData || []) as Schedule[])
+      setLoading(false)
+    }
+
+    loadData()
+  }, [])
+
+  const [addModal, setAddModal] = useState(false)
+  
 
   const [form, setForm] = useState({ empId: '', dayIdx: '0', start: '08:00', end: '16:00', special: '' })
 
@@ -61,56 +100,99 @@ export default function Schedules() {
     return d === 0 ? 6 : d - 1
   })()
 
+  const ROTATION_START = new Date(2026, 8, 7)
+
+  const rotationWeek = (() => {
+    const start = getWeekStart(ROTATION_START)
+    const current = getWeekStart(weekStart)
+
+    const difference =
+      Math.floor(
+        (current.getTime() - start.getTime()) /
+        (1000 * 60 * 60 * 24 * 7)
+      )
+
+    return ((difference % 4) + 4) % 4 + 1
+  })()
+
   const getSchedule = (empId: string) => {
-  const weekKey = weekStart.toISOString().slice(0, 10)
+    
 
-  // Si existe una modificación específica para esta semana,
-  // tiene prioridad sobre la rotación.
-  if (overrides[empId]?.[weekKey]) {
-    return overrides[empId][weekKey]
-  }
+    
 
-  const rotations = WEEKLY_SCHEDULES[empId]
+    // Buscar el horario correspondiente en Supabase
+    const schedule = schedules.find(
+      item =>
+        item.employee_id === empId &&
+        item.week_number === rotationWeek,
+    )
 
-  if (!rotations || rotations.length === 0) {
-    return Array(7).fill('—')
-  }
-
-  // La rotación comienza en la semana del 31/08/2026.
-  // Cada nueva semana avanza automáticamente a la siguiente.
-  const rotationAnchor = new Date('2026-08-31T00:00:00')
-  const weeksSinceAnchor = Math.floor(
-    (weekStart.getTime() - rotationAnchor.getTime()) /
-      (7 * 24 * 60 * 60 * 1000)
-  )
-
-  const rotationIndex =
-    ((weeksSinceAnchor % rotations.length) + rotations.length) %
-    rotations.length
-
-  return rotations[rotationIndex]
-}
-  const handleAdd = () => {
-    if (!form.empId) return
-    const dayIdx = parseInt(form.dayIdx)
-    const value = form.special || `${form.start}–${form.end}`
-    const weekKey = weekStart.toISOString().slice(0, 10)
-
-    const current = [
-      ...(overrides[form.empId]?.[weekKey] || getSchedule(form.empId)),
-    ]
-
-    current[dayIdx] = value
-
-    const updated = {
-      ...overrides,
-      [form.empId]: {
-        ...overrides[form.empId],
-        [weekKey]: current,
-      },
+    if (!schedule) {
+      return Array(7).fill('—')
     }
 
-    saveOverrides(updated)
+    return [
+      schedule.monday,
+      schedule.tuesday,
+      schedule.wednesday,
+      schedule.thursday,
+      schedule.friday,
+      schedule.saturday,
+      schedule.sunday,
+    ]
+  }
+  const handleAdd = async () => {
+    if (!form.empId) return
+
+    const dayIdx = parseInt(form.dayIdx)
+    const value = form.special || `${form.start}–${form.end}`
+
+    const schedule = schedules.find(
+      item =>
+        item.employee_id === form.empId &&
+        item.week_number === rotationWeek,
+    )
+
+    if (!schedule) {
+      console.error('No se encontró el horario para este empleado')
+      return
+    }
+
+    const columns = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ] as const
+
+    const column = columns[dayIdx]
+
+    const { error } = await supabase
+      .from('schedules')
+      .update({
+        [column]: value,
+      })
+      .eq('id', schedule.id)
+
+    if (error) {
+      console.error('Error actualizando horario:', error)
+      return
+    }
+
+    setSchedules(prev =>
+      prev.map(item =>
+        item.id === schedule.id
+          ? {
+            ...item,
+            [column]: value,
+          }
+          : item,
+      )
+    )
+
     setAddModal(false)
   }
 
@@ -123,6 +205,16 @@ export default function Schedules() {
   }
 
   const isCurrentWeek = weekOffset === 0
+
+  if (loading) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto">
+        <div className="text-sm text-zinc-500">
+          Cargando horarios...
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -179,12 +271,12 @@ export default function Schedules() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/50">
-              {EMPLOYEES.map(emp => (
+              {employees.map(emp => (
                 <tr key={emp.id} className="hover:bg-zinc-800/15 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium" style={{ backgroundColor: '#27272a', color: '#a1a1aa' }}>
-                        {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {emp.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                       </div>
                       <div className="min-w-0">
                         <div className="text-xs font-medium text-zinc-300 truncate">{emp.name.split(' ').slice(0, 2).join(' ')}</div>
@@ -234,7 +326,11 @@ export default function Schedules() {
                     <select value={form.empId} onChange={e => setForm({ ...form, empId: e.target.value })}
                       className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-100 focus:outline-none">
                       <option value="">Seleccionar...</option>
-                      {EMPLOYEES.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      {employees.map(e => (
+                        <option key={e.id} value={e.id}>
+                          {e.name}
+                        </option>
+                      ))}
                     </select>
                   )
                 },

@@ -5,9 +5,12 @@ import Schedules from './pages/Schedules'
 import Bonuses from './pages/Bonuses'
 import Withdrawals from './pages/Withdrawals'
 import Plano from './pages/Plano'
+import { supabase } from './SupabaseClient'
 import type { Page } from './data'
 
 const GOLD = '#c9a84c'
+const ACCESS_PASSWORD = 'babieca2026'
+const ACCESS_STORAGE_KEY = 'babieca_access_authorized'
 
 const NAV_ITEMS: { id: Page; icon: string; label: string }[] = [
   { id: 'dashboard', icon: '🏠', label: 'Inicio' },
@@ -31,6 +34,29 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
+
+  const [authorized, setAuthorized] = useState(() => {
+    return localStorage.getItem(ACCESS_STORAGE_KEY) === 'true'
+  })
+
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState(false)
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (password === ACCESS_PASSWORD) {
+      localStorage.setItem(ACCESS_STORAGE_KEY, 'true')
+      setAuthorized(true)
+      setPassword('')
+      setLoginError(false)
+      return
+    }
+
+    setLoginError(true)
+    setPassword('')
+  }
+
 
   const today = new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', })
   const [currentTime, setCurrentTime] = useState(
@@ -70,6 +96,96 @@ export default function App() {
     { text: 'Luis Torres aún no ha registrado llegada', time: 'Hace 25 min', dot: '#f87171' },
     { text: 'Diego Morales aún no ha registrado llegada', time: 'Hace 25 min', dot: '#f87171' },
   ]
+
+  if (!authorized) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{
+          backgroundColor: '#09090b',
+          color: '#f4f4f5',
+        }}
+      >
+        <div className="w-full max-w-sm">
+          <div
+            className="rounded-2xl p-8 shadow-2xl"
+            style={{
+              backgroundColor: '#111113',
+              border: '1px solid #1c1c1e',
+            }}
+          >
+            <div className="flex flex-col items-center text-center mb-8">
+              <div
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-lg font-bold mb-4"
+                style={{
+                  backgroundColor: 'rgba(201,168,76,0.12)',
+                  color: GOLD,
+                  border: '1px solid rgba(201,168,76,0.25)',
+                }}
+              >
+                HB
+              </div>
+
+              <h1 className="text-xl font-semibold text-zinc-100">
+                Hípicas Babieca
+              </h1>
+
+              <p className="text-sm mt-1 text-zinc-500">
+                Acceso al sistema
+              </p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2 block">
+                  Contraseña
+                </label>
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => {
+                    setPassword(e.target.value)
+                    setLoginError(false)
+                  }}
+                  placeholder="Ingresa la contraseña"
+                  autoFocus
+                  className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-700 focus:outline-none focus:border-zinc-500 transition-colors"
+                />
+              </div>
+
+              {loginError && (
+                <p className="text-xs text-red-400">
+                  La contraseña ingresada es incorrecta.
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-lg text-sm font-semibold transition-all"
+                style={{
+                  backgroundColor: GOLD,
+                  color: '#09090b',
+                }}
+                onMouseEnter={e =>
+                  (e.currentTarget.style.backgroundColor = '#e4c97a')
+                }
+                onMouseLeave={e =>
+                  (e.currentTarget.style.backgroundColor = GOLD)
+                }
+              >
+                Ingresar
+              </button>
+            </form>
+          </div>
+
+          <p className="text-center text-xs text-zinc-700 mt-5">
+            Acceso autorizado para personal de Hípicas Babieca
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full" style={{ backgroundColor: '#09090b', color: '#f4f4f5' }}>

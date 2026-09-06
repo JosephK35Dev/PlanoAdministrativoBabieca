@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { EMPLOYEES, ATTENDANCE_RECORDS, WEEKLY_SCHEDULES, } from '../data'
+import { ATTENDANCE_RECORDS, WEEKLY_SCHEDULES, } from '../data'
+import { supabase } from '../SupabaseClient'
 import type { Employee, EmployeeStatus, AttendanceRecord, JornadaStatus } from '../data'
 
 const GOLD = '#c9a84c'
@@ -160,54 +161,77 @@ function Modal({
 export default function Employees() {
 
   const getEffectiveSchedule = (employeeId: string) => {
-  const saved = localStorage.getItem('babieca_schedules')
+    const saved = localStorage.getItem('babieca_schedules')
 
-  const today = new Date()
-  const day = today.getDay()
-  const diff = today.getDate() - day + (day === 0 ? -6 : 1)
+    const today = new Date()
+    const day = today.getDay()
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1)
 
-  const weekStart = new Date(today)
-  weekStart.setDate(diff)
-  weekStart.setHours(0, 0, 0, 0)
+    const weekStart = new Date(today)
+    weekStart.setDate(diff)
+    weekStart.setHours(0, 0, 0, 0)
 
-  const weekKey = weekStart.toISOString().slice(0, 10)
+    const weekKey = weekStart.toISOString().slice(0, 10)
 
-  // 1. Primero: horario modificado manualmente para esta semana
-  if (saved) {
-    try {
-      const schedules = JSON.parse(saved)
-      const override = schedules[employeeId]?.[weekKey]
+    // 1. Primero: horario modificado manualmente para esta semana
+    if (saved) {
+      try {
+        const schedules = JSON.parse(saved)
+        const override = schedules[employeeId]?.[weekKey]
 
-      if (override) {
-        return override
+        if (override) {
+          return override
+        }
+      } catch {
+        // Si localStorage falla, continuamos con la rotación
       }
-    } catch {
-      // Si localStorage falla, continuamos con la rotación
     }
-  }
 
-  // 2. Horario de la rotación semanal
-  const rotations = WEEKLY_SCHEDULES[employeeId]
+    // 2. Horario de la rotación semanal
+    const rotations = WEEKLY_SCHEDULES[employeeId]
 
-  if (!rotations || rotations.length === 0) {
-    return Array(7).fill('—')
-  }
+    if (!rotations || rotations.length === 0) {
+      return Array(7).fill('—')
+    }
 
-  // La rotación comienza en la semana del 31/08/2026
-  const rotationAnchor = new Date('2026-08-31T00:00:00')
+    // La rotación comienza en la semana del 31/08/2026
+    const rotationAnchor = new Date('2026-08-31T00:00:00')
 
-  const weeksSinceAnchor = Math.floor(
-    (weekStart.getTime() - rotationAnchor.getTime()) /
+    const weeksSinceAnchor = Math.floor(
+      (weekStart.getTime() - rotationAnchor.getTime()) /
       (7 * 24 * 60 * 60 * 1000)
-  )
+    )
 
-  const rotationIndex =
-    ((weeksSinceAnchor % rotations.length) + rotations.length) %
-    rotations.length
+    const rotationIndex =
+      ((weeksSinceAnchor % rotations.length) + rotations.length) %
+      rotations.length
 
-  return rotations[rotationIndex]
-}
-  const [employees, setEmployees] = useState<Employee[]>(EMPLOYEES)
+    return rotations[rotationIndex]
+  }
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employeesLoading, setEmployeesLoading] = useState(true)
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      setEmployeesLoading(true)
+
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .order('id')
+
+      if (error) {
+        console.error('Error cargando empleados:', error)
+        setEmployeesLoading(false)
+        return
+      }
+
+      setEmployees(data as Employee[])
+      setEmployeesLoading(false)
+    }
+
+    loadEmployees()
+  }, [])
 
   const [attendance, setAttendance] =
     useState<AttendanceRecord[]>(() => {
@@ -294,7 +318,8 @@ export default function Employees() {
     // No tiene turno o está de descanso
     if (
       !todaySchedule ||
-      todaySchedule === 'DESCANSO'
+      todaySchedule === 'DESCANSO' ||
+      todaySchedule === '—'
     ) {
       return 'FUERA_DE_TURNO'
     }
@@ -495,11 +520,8 @@ export default function Employees() {
     closeDepartureModal()
   }
 
-  const handleAddEmployee = () => {
-    if (
-      !newName.trim() ||
-      !newRole.trim()
-    ) {
+  const handleAddEmployee = async () => {
+    if (!newName.trim() || !newRole.trim()) {
       return
     }
 
@@ -516,9 +538,20 @@ export default function Employees() {
       status: 'ACTIVO',
     }
 
+    const { data, error } = await supabase
+      .from('employees')
+      .insert(newEmployee)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error agregando empleado:', error)
+      return
+    }
+
     setEmployees(prev => [
       ...prev,
-      newEmployee,
+      data as Employee,
     ])
 
     setNewName('')
@@ -526,7 +559,7 @@ export default function Employees() {
     setEmployeeModal(false)
   }
 
-  const handleEditEmployee = () => {
+  const handleEditEmployee = async () => {
     if (
       !editingEmployee ||
       !newName.trim() ||
@@ -535,14 +568,25 @@ export default function Employees() {
       return
     }
 
+    const { data, error } = await supabase
+      .from('employees')
+      .update({
+        name: newName.trim(),
+        role: newRole.trim(),
+      })
+      .eq('id', editingEmployee.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error editando empleado:', error)
+      return
+    }
+
     setEmployees(prev =>
       prev.map(employee =>
         employee.id === editingEmployee.id
-          ? {
-            ...employee,
-            name: newName.trim(),
-            role: newRole.trim(),
-          }
+          ? (data as Employee)
           : employee,
       ),
     )
@@ -553,19 +597,35 @@ export default function Employees() {
     setEmployeeModal(false)
   }
 
-  const toggleEmployeeStatus = (
+  const toggleEmployeeStatus = async (
     employee: Employee,
   ) => {
+    const newStatus: EmployeeStatus =
+      employee.status === 'ACTIVO'
+        ? 'INACTIVO'
+        : 'ACTIVO'
+
+    const { data, error } = await supabase
+      .from('employees')
+      .update({
+        status: newStatus,
+      })
+      .eq('id', employee.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(
+        'Error cambiando estado del empleado:',
+        error,
+      )
+      return
+    }
+
     setEmployees(prev =>
       prev.map(e =>
         e.id === employee.id
-          ? {
-            ...e,
-            status:
-              e.status === 'ACTIVO'
-                ? 'INACTIVO'
-                : 'ACTIVO',
-          }
+          ? (data as Employee)
           : e,
       ),
     )
