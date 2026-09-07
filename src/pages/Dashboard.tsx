@@ -236,8 +236,6 @@ export default function Dashboard({
    * ============================================================
    * CARGAR ASISTENCIA
    *
-   * TODAVÍA VIENE DE LOCALSTORAGE.
-   * LA MIGRAREMOS CUANDO CONECTEMOS EL MÓDULO DE ASISTENCIA.
    * ============================================================
    */
 
@@ -504,7 +502,7 @@ export default function Dashboard({
               'DM Serif Display, Georgia, serif',
           }}
         >
-          {greeting}, Joseph
+          {greeting}, Babi
         </h2>
 
         <p className="text-sm text-zinc-600 mt-0.5 capitalize">

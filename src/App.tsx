@@ -33,7 +33,6 @@ const PAGE_TITLES: Record<Page, string> = {
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
 
   const [authorized, setAuthorized] = useState(() => {
     return localStorage.getItem(ACCESS_STORAGE_KEY) === 'true'
@@ -90,12 +89,7 @@ export default function App() {
     }
   }
 
-  const notifications = [
-    { text: '2 bonos pendientes de entrega', time: 'Ahora', dot: '#fbbf24' },
-    { text: '2 retiros pendientes de pago', time: 'Hace 10 min', dot: '#fbbf24' },
-    { text: 'Luis Torres aún no ha registrado llegada', time: 'Hace 25 min', dot: '#f87171' },
-    { text: 'Diego Morales aún no ha registrado llegada', time: 'Hace 25 min', dot: '#f87171' },
-  ]
+  
 
   if (!authorized) {
     return (
@@ -245,8 +239,8 @@ export default function App() {
               CM
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-zinc-300 truncate">Carlos Méndez</div>
-              <div className="text-xs" style={{ color: '#52525b' }}>Supervisor</div>
+              <div className="text-xs font-medium text-zinc-300 truncate">Hípicas Babieca</div>
+              <div className="text-xs" style={{ color: '#52525b' }}>Administración</div>
             </div>
           </div>
         </div>
@@ -266,42 +260,11 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative">
-              <button
-                onClick={() => setNotifOpen(!notifOpen)}
-                className="relative w-8 h-8 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-900 transition-all">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
-              </button>
-
-              {notifOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setNotifOpen(false)} />
-                  <div className="absolute right-0 top-10 w-80 rounded-xl shadow-2xl z-20 overflow-hidden" style={{ backgroundColor: '#111113', border: '1px solid #1c1c1e' }}>
-                    <div className="px-4 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
-                      <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Notificaciones</span>
-                    </div>
-                    <div className="divide-y" style={{ borderColor: '#1c1c1e' }}>
-                      {notifications.map((n, i) => (
-                        <div key={i} className="flex items-start gap-3 px-4 py-3 hover:bg-zinc-900 transition-colors cursor-default">
-                          <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: n.dot }} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-zinc-300">{n.text}</p>
-                            <p className="text-xs mt-0.5" style={{ color: '#52525b' }}>{n.time}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            
 
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer"
               style={{ backgroundColor: 'rgba(201,168,76,0.12)', color: GOLD, border: '1px solid rgba(201,168,76,0.25)' }}>
-              CM
+              HB
             </div>
           </div>
         </header>
