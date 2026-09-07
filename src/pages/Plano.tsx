@@ -4,9 +4,9 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
 import Image from '@tiptap/extension-image'
+import { supabase } from '../SupabaseClient'
 
 const GOLD = '#c9a84c'
-const STORAGE_KEY = 'babieca_plano_documents'
 
 interface PlanoDocument {
   id: string
@@ -202,37 +202,6 @@ function getInitialContent(title: string): string {
   }
 }
 
-function loadDocuments(): PlanoDocument[] {
-  const saved = localStorage.getItem(STORAGE_KEY)
-
-  if (!saved) {
-    return createInitialDocuments()
-  }
-
-  try {
-    const parsed = JSON.parse(saved)
-
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return createInitialDocuments()
-    }
-
-    return parsed
-  } catch {
-    return createInitialDocuments()
-  }
-}
-
-/*
- * Esta función centraliza el guardado.
- *
- * Actualmente utiliza localStorage.
- * Más adelante podremos reemplazar solamente esta lógica
- * por Supabase sin tener que modificar todo el editor.
- */
-function saveDocuments(documents: PlanoDocument[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(documents))
-}
-
 function ToolbarButton({
   active = false,
   onClick,
@@ -252,7 +221,9 @@ function ToolbarButton({
       onClick={onClick}
       className="w-8 h-8 rounded-md flex items-center justify-center text-sm transition-all"
       style={{
-        backgroundColor: active ? 'rgba(201,168,76,0.15)' : 'transparent',
+        backgroundColor: active
+          ? 'rgba(201,168,76,0.15)'
+          : 'transparent',
         color: active ? GOLD : '#a1a1aa',
         border: active
           ? '1px solid rgba(201,168,76,0.25)'
@@ -265,19 +236,97 @@ function ToolbarButton({
 }
 
 export default function Plano() {
-  const [documents, setDocuments] = useState<PlanoDocument[]>(loadDocuments)
-  const [selectedId, setSelectedId] = useState('document-1')
+  const [documents, setDocuments] = useState<PlanoDocument[]>([])
+  const [selectedId, setSelectedId] = useState('')
   const [saved, setSaved] = useState(true)
+  const [loading, setLoading] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  /*
+   * CARGAR DOCUMENTOS DESDE SUPABASE
+   */
+  useEffect(() => {
+    const loadDocuments = async () => {
+      const { data, error } = await supabase
+        .from('plano_documents')
+        .select('*')
+        .order('position', {
+          ascending: true,
+        })
+
+      if (error) {
+        console.error(
+          'Error cargando documentos del Plano:',
+          error,
+        )
+        setLoading(false)
+        return
+      }
+
+      /*
+       * Si la tabla está vacía, creamos los
+       * documentos iniciales automáticamente.
+       */
+      if (!data || data.length === 0) {
+        const initialDocuments = createInitialDocuments()
+
+        const rows = initialDocuments.map(document => ({
+          id: document.id,
+          title: document.title,
+          content: document.content,
+          position: document.position,
+          updated_at: document.updatedAt,
+        }))
+
+        const { error: insertError } = await supabase
+          .from('plano_documents')
+          .insert(rows)
+
+        if (insertError) {
+          console.error(
+            'Error creando documentos iniciales:',
+            insertError,
+          )
+          setLoading(false)
+          return
+        }
+
+        setDocuments(initialDocuments)
+        setSelectedId(initialDocuments[0]?.id ?? '')
+        setLoading(false)
+        return
+      }
+
+      const mappedDocuments: PlanoDocument[] = data.map(
+        document => ({
+          id: document.id,
+          title: document.title,
+          content: document.content,
+          position: document.position,
+          updatedAt: document.updated_at,
+        }),
+      )
+
+      setDocuments(mappedDocuments)
+      setSelectedId(mappedDocuments[0]?.id ?? '')
+      setLoading(false)
+    }
+
+    loadDocuments()
+  }, [])
+
   const selectedDocument = useMemo(
     () =>
-      documents.find(document => document.id === selectedId) ??
-      documents[0],
+      documents.find(
+        document => document.id === selectedId,
+      ) ?? documents[0],
     [documents, selectedId],
   )
 
+  /*
+   * EDITOR
+   */
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -313,63 +362,152 @@ export default function Plano() {
   })
 
   /*
-   * Cambia el contenido del editor cuando cambiamos
-   * de documento.
-   *
-   * emitUpdate: false evita que este cambio active
-   * el onUpdate y guarde contenido incorrectamente.
+   * CAMBIAR DOCUMENTO
    */
   useEffect(() => {
     if (!editor || !selectedDocument) return
 
-    editor.commands.setContent(selectedDocument.content, {
-      emitUpdate: false,
-    })
+    editor.commands.setContent(
+      selectedDocument.content,
+      {
+        emitUpdate: false,
+      },
+    )
 
     setSaved(true)
-  }, [editor, selectedId])
+  }, [editor, selectedId, selectedDocument])
 
   /*
-   * AUTOSAVE
+   * AUTOSAVE EN SUPABASE
+   *
+   * Se espera 500 ms después del último cambio
+   * antes de guardar.
    */
   useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      saveDocuments(documents)
+    if (loading || !documents.length) return
+
+    const timeout = window.setTimeout(async () => {
+      const updatedDocument = documents.find(
+        document => document.id === selectedId,
+      )
+
+      if (!updatedDocument) return
+
+      const { error } = await supabase
+        .from('plano_documents')
+        .update({
+          title: updatedDocument.title,
+          content: updatedDocument.content,
+          position: updatedDocument.position,
+          updated_at: updatedDocument.updatedAt,
+        })
+        .eq('id', updatedDocument.id)
+
+      if (error) {
+        console.error(
+          'Error guardando documento:',
+          error,
+        )
+        setSaved(false)
+        return
+      }
+
       setSaved(true)
     }, 500)
 
-    return () => window.clearTimeout(timeout)
-  }, [documents])
+    return () => {
+      window.clearTimeout(timeout)
+    }
+  }, [
+    documents,
+    selectedId,
+    loading,
+  ])
+
+  /*
+   * GUARDAR MANUALMENTE
+   */
+  const saveCurrentDocument = async () => {
+    if (!selectedDocument) return
+
+    setSaved(false)
+
+    const { error } = await supabase
+      .from('plano_documents')
+      .update({
+        title: selectedDocument.title,
+        content: selectedDocument.content,
+        position: selectedDocument.position,
+        updated_at: selectedDocument.updatedAt,
+      })
+      .eq('id', selectedDocument.id)
+
+    if (error) {
+      console.error(
+        'Error guardando documento:',
+        error,
+      )
+      return
+    }
+
+    setSaved(true)
+  }
 
   /*
    * CREAR DOCUMENTO
    */
-  const createDocument = () => {
-    const title = window.prompt('Nombre del nuevo documento:')
+  const createDocument = async () => {
+    const title = window.prompt(
+      'Nombre del nuevo documento:',
+    )
 
     if (!title?.trim()) return
 
     const newDocument: PlanoDocument = {
       id: `document-${Date.now()}`,
       title: title.trim(),
-      content: '<p>Escribe aquí el contenido del documento...</p>',
+      content:
+        '<p>Escribe aquí el contenido del documento...</p>',
       position: documents.length,
       updatedAt: new Date().toISOString(),
     }
 
-    const updatedDocuments = [...documents, newDocument]
+    const { error } = await supabase
+      .from('plano_documents')
+      .insert({
+        id: newDocument.id,
+        title: newDocument.title,
+        content: newDocument.content,
+        position: newDocument.position,
+        updated_at: newDocument.updatedAt,
+      })
 
-    setDocuments(updatedDocuments)
+    if (error) {
+      console.error(
+        'Error creando documento:',
+        error,
+      )
+      return
+    }
+
+    setDocuments(current => [
+      ...current,
+      newDocument,
+    ])
+
     setSelectedId(newDocument.id)
-    saveDocuments(updatedDocuments)
     setSaved(true)
   }
 
   /*
    * RENOMBRAR DOCUMENTO
    */
-  const renameDocument = (documentId: string) => {
-    const document = documents.find(doc => doc.id === documentId)
+  const renameDocument = async (
+    documentId: string,
+  ) => {
+    const document = documents.find(
+      doc => doc.id === documentId,
+    )
 
     if (!document) return
 
@@ -380,26 +518,48 @@ export default function Plano() {
 
     if (!newTitle?.trim()) return
 
-    const updatedDocuments = documents.map(doc =>
-      doc.id === documentId
-        ? {
-          ...doc,
-          title: newTitle.trim(),
-          updatedAt: new Date().toISOString(),
-        }
-        : doc,
+    const updatedDocument = {
+      ...document,
+      title: newTitle.trim(),
+      updatedAt: new Date().toISOString(),
+    }
+
+    const { error } = await supabase
+      .from('plano_documents')
+      .update({
+        title: updatedDocument.title,
+        updated_at: updatedDocument.updatedAt,
+      })
+      .eq('id', documentId)
+
+    if (error) {
+      console.error(
+        'Error renombrando documento:',
+        error,
+      )
+      return
+    }
+
+    setDocuments(current =>
+      current.map(doc =>
+        doc.id === documentId
+          ? updatedDocument
+          : doc,
+      ),
     )
 
-    setDocuments(updatedDocuments)
-    saveDocuments(updatedDocuments)
     setSaved(true)
   }
 
   /*
    * ELIMINAR DOCUMENTO
    */
-  const deleteDocument = (documentId: string) => {
-    const document = documents.find(doc => doc.id === documentId)
+  const deleteDocument = async (
+    documentId: string,
+  ) => {
+    const document = documents.find(
+      doc => doc.id === documentId,
+    )
 
     if (!document) return
 
@@ -409,6 +569,19 @@ export default function Plano() {
 
     if (!confirmed) return
 
+    const { error } = await supabase
+      .from('plano_documents')
+      .delete()
+      .eq('id', documentId)
+
+    if (error) {
+      console.error(
+        'Error eliminando documento:',
+        error,
+      )
+      return
+    }
+
     const updatedDocuments = documents
       .filter(doc => doc.id !== documentId)
       .map((doc, index) => ({
@@ -416,24 +589,37 @@ export default function Plano() {
         position: index,
       }))
 
-    setDocuments(updatedDocuments)
-
     /*
-     * Si eliminamos el documento que estamos viendo,
-     * seleccionamos automáticamente otro.
+     * Actualizamos las posiciones restantes
+     * en Supabase.
      */
-    if (documentId === selectedId) {
-      setSelectedId(updatedDocuments[0]?.id ?? '')
+    for (const document of updatedDocuments) {
+      await supabase
+        .from('plano_documents')
+        .update({
+          position: document.position,
+          updated_at: document.updatedAt,
+        })
+        .eq('id', document.id)
     }
 
-    saveDocuments(updatedDocuments)
+    setDocuments(updatedDocuments)
+
+    if (documentId === selectedId) {
+      setSelectedId(
+        updatedDocuments[0]?.id ?? '',
+      )
+    }
+
     setSaved(true)
   }
 
   /*
    * SELECCIONAR DOCUMENTO
    */
-  const handleSelectDocument = (id: string) => {
+  const handleSelectDocument = (
+    id: string,
+  ) => {
     if (id === selectedId) return
 
     setSelectedId(id)
@@ -450,14 +636,20 @@ export default function Plano() {
     }
 
     if (file.size > 3 * 1024 * 1024) {
-      alert('La imagen es demasiado grande. Máximo 3 MB.')
+      alert(
+        'La imagen es demasiado grande. Máximo 3 MB.',
+      )
       return
     }
 
     const reader = new FileReader()
 
     reader.onload = () => {
-      if (typeof reader.result !== 'string') return
+      if (
+        typeof reader.result !== 'string'
+      ) {
+        return
+      }
 
       editor
         .chain()
@@ -472,7 +664,20 @@ export default function Plano() {
     reader.readAsDataURL(file)
   }
 
-  if (!editor || !selectedDocument) {
+  if (loading) {
+    return (
+      <div className="p-6 max-w-[1500px] mx-auto">
+        <div className="text-sm text-zinc-500">
+          Cargando Plano...
+        </div>
+      </div>
+    )
+  }
+
+  if (
+    !editor ||
+    !selectedDocument
+  ) {
     return null
   }
 
@@ -487,7 +692,9 @@ export default function Plano() {
       {/* HEADER */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Plano</h1>
+          <h1 className="text-xl font-semibold text-zinc-100">
+            Plano
+          </h1>
 
           <p className="text-sm text-zinc-500 mt-1">
             Manual interno y documentación operativa
@@ -498,28 +705,31 @@ export default function Plano() {
           <span
             className="text-xs"
             style={{
-              color: saved ? '#71717a' : GOLD,
+              color: saved
+                ? '#71717a'
+                : GOLD,
             }}
           >
-            {saved ? 'Guardado ✓' : 'Guardando...'}
+            {saved
+              ? 'Guardado ✓'
+              : 'Guardando...'}
           </span>
 
           <button
             type="button"
-            onClick={() => {
-              saveDocuments(documents)
-              setSaved(true)
-            }}
+            onClick={saveCurrentDocument}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
             style={{
               backgroundColor: GOLD,
               color: '#09090b',
             }}
             onMouseEnter={e =>
-              (e.currentTarget.style.backgroundColor = '#e4c97a')
+            (e.currentTarget.style.backgroundColor =
+              '#e4c97a')
             }
             onMouseLeave={e =>
-              (e.currentTarget.style.backgroundColor = GOLD)
+            (e.currentTarget.style.backgroundColor =
+              GOLD)
             }
           >
             <svg
@@ -544,17 +754,23 @@ export default function Plano() {
       <div className="lg:hidden flex items-center gap-2">
         <select
           value={selectedId}
-          onChange={e => handleSelectDocument(e.target.value)}
+          onChange={e =>
+            handleSelectDocument(
+              e.target.value,
+            )
+          }
           className="flex-1 min-w-0 px-3 py-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-sm text-zinc-200 outline-none"
         >
           {documents.map(document => (
-            <option key={document.id} value={document.id}>
+            <option
+              key={document.id}
+              value={document.id}
+            >
               {document.title}
             </option>
           ))}
         </select>
 
-        {/* NEW DOCUMENT */}
         <button
           type="button"
           onClick={createDocument}
@@ -562,8 +778,10 @@ export default function Plano() {
           className="flex-shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-xl transition-all"
           style={{
             color: GOLD,
-            backgroundColor: 'rgba(201,168,76,0.08)',
-            border: '1px solid rgba(201,168,76,0.25)',
+            backgroundColor:
+              'rgba(201,168,76,0.08)',
+            border:
+              '1px solid rgba(201,168,76,0.25)',
           }}
           onMouseEnter={e =>
           (e.currentTarget.style.backgroundColor =
@@ -595,7 +813,6 @@ export default function Plano() {
             backgroundColor: '#0d0d0f',
           }}
         >
-          {/* SIDEBAR HEADER */}
           <div className="px-4 py-4 border-b border-zinc-800 flex items-center justify-between">
             <p className="text-xs font-semibold text-zinc-500 tracking-wider">
               DOCUMENTOS
@@ -608,7 +825,8 @@ export default function Plano() {
               className="w-7 h-7 rounded-md flex items-center justify-center text-lg transition-all"
               style={{
                 color: GOLD,
-                backgroundColor: 'rgba(201,168,76,0.08)',
+                backgroundColor:
+                  'rgba(201,168,76,0.08)',
               }}
               onMouseEnter={e =>
               (e.currentTarget.style.backgroundColor =
@@ -623,10 +841,10 @@ export default function Plano() {
             </button>
           </div>
 
-          {/* DOCUMENT LIST */}
           <div className="flex-1 overflow-y-auto p-2">
             {documents.map(document => {
-              const active = document.id === selectedId
+              const active =
+                document.id === selectedId
 
               return (
                 <div
@@ -641,22 +859,29 @@ export default function Plano() {
                       : '1px solid transparent',
                   }}
                 >
-                  {/* DOCUMENT NAME */}
                   <button
                     type="button"
-                    onClick={() => handleSelectDocument(document.id)}
+                    onClick={() =>
+                      handleSelectDocument(
+                        document.id,
+                      )
+                    }
                     className="min-w-0 flex-1 text-left px-3 py-2.5 text-sm transition-all"
                     style={{
-                      color: active ? GOLD : '#a1a1aa',
+                      color: active
+                        ? GOLD
+                        : '#a1a1aa',
                     }}
                     onMouseEnter={e => {
                       if (!active) {
-                        e.currentTarget.style.color = '#e4e4e7'
+                        e.currentTarget.style.color =
+                          '#e4e4e7'
                       }
                     }}
                     onMouseLeave={e => {
                       if (!active) {
-                        e.currentTarget.style.color = '#a1a1aa'
+                        e.currentTarget.style.color =
+                          '#a1a1aa'
                       }
                     }}
                   >
@@ -665,14 +890,15 @@ export default function Plano() {
                     </span>
                   </button>
 
-                  {/* ACTIONS */}
-                  <div
-                    className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
+                  <div className="flex items-center gap-0.5 pr-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       title="Renombrar"
-                      onClick={() => renameDocument(document.id)}
+                      onClick={() =>
+                        renameDocument(
+                          document.id,
+                        )
+                      }
                       className="w-7 h-7 rounded flex items-center justify-center text-xs text-zinc-500 hover:text-[#c9a84c] hover:bg-zinc-800 transition-all"
                     >
                       ✎
@@ -681,7 +907,11 @@ export default function Plano() {
                     <button
                       type="button"
                       title="Eliminar"
-                      onClick={() => deleteDocument(document.id)}
+                      onClick={() =>
+                        deleteDocument(
+                          document.id,
+                        )
+                      }
                       className="w-7 h-7 rounded flex items-center justify-center text-xs text-zinc-500 hover:text-red-400 hover:bg-zinc-800 transition-all"
                     >
                       🗑
@@ -692,14 +922,14 @@ export default function Plano() {
             })}
           </div>
 
-          {/* NEW DOCUMENT BUTTON */}
           <div className="p-3 border-t border-zinc-800">
             <button
               type="button"
               onClick={createDocument}
               className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
               style={{
-                border: '1px dashed rgba(201,168,76,0.4)',
+                border:
+                  '1px dashed rgba(201,168,76,0.4)',
                 color: GOLD,
               }}
               onMouseEnter={e => {
@@ -707,10 +937,13 @@ export default function Plano() {
                   'rgba(201,168,76,0.08)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.backgroundColor = 'transparent'
+                e.currentTarget.style.backgroundColor =
+                  'transparent'
               }}
             >
-              <span className="text-lg leading-none">+</span>
+              <span className="text-lg leading-none">
+                +
+              </span>
               Nuevo documento
             </button>
           </div>
@@ -718,10 +951,11 @@ export default function Plano() {
 
         {/* EDITOR */}
         <section className="flex-1 min-w-0 flex flex-col">
-          {/* DOCUMENT HEADER */}
           <div
             className="px-4 md:px-6 py-4 border-b flex items-center justify-between gap-3"
-            style={{ borderColor: '#27272a' }}
+            style={{
+              borderColor: '#27272a',
+            }}
           >
             <div className="min-w-0 flex-1">
               <p className="text-xs text-zinc-600 mb-1">
@@ -733,12 +967,15 @@ export default function Plano() {
               </h2>
             </div>
 
-            {/* MOBILE ACTIONS */}
             <div className="lg:hidden flex items-center gap-1">
               <button
                 type="button"
                 title="Renombrar"
-                onClick={() => renameDocument(selectedDocument.id)}
+                onClick={() =>
+                  renameDocument(
+                    selectedDocument.id,
+                  )
+                }
                 className="w-8 h-8 rounded-md flex items-center justify-center text-zinc-400 hover:text-[#c9a84c] hover:bg-zinc-800 transition-all"
               >
                 ✎
@@ -747,7 +984,11 @@ export default function Plano() {
               <button
                 type="button"
                 title="Eliminar"
-                onClick={() => deleteDocument(selectedDocument.id)}
+                onClick={() =>
+                  deleteDocument(
+                    selectedDocument.id,
+                  )
+                }
                 className="w-8 h-8 rounded-md flex items-center justify-center text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-all"
               >
                 🗑
@@ -767,7 +1008,11 @@ export default function Plano() {
               title="Negrita"
               active={editor.isActive('bold')}
               onClick={() =>
-                editor.chain().focus().toggleBold().run()
+                editor
+                  .chain()
+                  .focus()
+                  .toggleBold()
+                  .run()
               }
             >
               <strong>B</strong>
@@ -777,7 +1022,11 @@ export default function Plano() {
               title="Cursiva"
               active={editor.isActive('italic')}
               onClick={() =>
-                editor.chain().focus().toggleItalic().run()
+                editor
+                  .chain()
+                  .focus()
+                  .toggleItalic()
+                  .run()
               }
             >
               <em>I</em>
@@ -787,7 +1036,11 @@ export default function Plano() {
               title="Subrayado"
               active={editor.isActive('underline')}
               onClick={() =>
-                editor.chain().focus().toggleUnderline().run()
+                editor
+                  .chain()
+                  .focus()
+                  .toggleUnderline()
+                  .run()
               }
             >
               <u>U</u>
@@ -797,12 +1050,17 @@ export default function Plano() {
 
             <ToolbarButton
               title="Título 1"
-              active={editor.isActive('heading', { level: 1 })}
+              active={editor.isActive(
+                'heading',
+                { level: 1 },
+              )}
               onClick={() =>
                 editor
                   .chain()
                   .focus()
-                  .toggleHeading({ level: 1 })
+                  .toggleHeading({
+                    level: 1,
+                  })
                   .run()
               }
             >
@@ -811,12 +1069,17 @@ export default function Plano() {
 
             <ToolbarButton
               title="Título 2"
-              active={editor.isActive('heading', { level: 2 })}
+              active={editor.isActive(
+                'heading',
+                { level: 2 },
+              )}
               onClick={() =>
                 editor
                   .chain()
                   .focus()
-                  .toggleHeading({ level: 2 })
+                  .toggleHeading({
+                    level: 2,
+                  })
                   .run()
               }
             >
@@ -825,12 +1088,17 @@ export default function Plano() {
 
             <ToolbarButton
               title="Título 3"
-              active={editor.isActive('heading', { level: 3 })}
+              active={editor.isActive(
+                'heading',
+                { level: 3 },
+              )}
               onClick={() =>
                 editor
                   .chain()
                   .focus()
-                  .toggleHeading({ level: 3 })
+                  .toggleHeading({
+                    level: 3,
+                  })
                   .run()
               }
             >
@@ -841,7 +1109,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Lista con viñetas"
-              active={editor.isActive('bulletList')}
+              active={editor.isActive(
+                'bulletList',
+              )}
               onClick={() =>
                 editor
                   .chain()
@@ -855,7 +1125,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Lista numerada"
-              active={editor.isActive('orderedList')}
+              active={editor.isActive(
+                'orderedList',
+              )}
               onClick={() =>
                 editor
                   .chain()
@@ -871,7 +1143,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Alinear izquierda"
-              active={editor.isActive({ textAlign: 'left' })}
+              active={editor.isActive({
+                textAlign: 'left',
+              })}
               onClick={() =>
                 editor
                   .chain()
@@ -885,7 +1159,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Centrar"
-              active={editor.isActive({ textAlign: 'center' })}
+              active={editor.isActive({
+                textAlign: 'center',
+              })}
               onClick={() =>
                 editor
                   .chain()
@@ -899,7 +1175,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Alinear derecha"
-              active={editor.isActive({ textAlign: 'right' })}
+              active={editor.isActive({
+                textAlign: 'right',
+              })}
               onClick={() =>
                 editor
                   .chain()
@@ -928,7 +1206,9 @@ export default function Plano() {
 
             <ToolbarButton
               title="Insertar imagen"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() =>
+                fileInputRef.current?.click()
+              }
             >
               🖼
             </ToolbarButton>
@@ -939,7 +1219,8 @@ export default function Plano() {
               accept="image/*"
               className="hidden"
               onChange={e => {
-                const file = e.target.files?.[0]
+                const file =
+                  e.target.files?.[0]
 
                 if (file) {
                   handleImageUpload(file)
@@ -954,7 +1235,11 @@ export default function Plano() {
             <ToolbarButton
               title="Deshacer"
               onClick={() =>
-                editor.chain().focus().undo().run()
+                editor
+                  .chain()
+                  .focus()
+                  .undo()
+                  .run()
               }
             >
               ↶
@@ -963,7 +1248,11 @@ export default function Plano() {
             <ToolbarButton
               title="Rehacer"
               onClick={() =>
-                editor.chain().focus().redo().run()
+                editor
+                  .chain()
+                  .focus()
+                  .redo()
+                  .run()
               }
             >
               ↷
@@ -973,7 +1262,9 @@ export default function Plano() {
           {/* EDITABLE AREA */}
           <div className="flex-1 overflow-y-auto bg-zinc-950">
             <div className="max-w-4xl mx-auto px-5 md:px-12 py-8 md:py-10">
-              <EditorContent editor={editor} />
+              <EditorContent
+                editor={editor}
+              />
             </div>
           </div>
         </section>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../SupabaseClient'
 import type { BonusRecord } from '../data'
 
 const GOLD = '#c9a84c'
@@ -173,7 +174,6 @@ function formatMoney(value: number) {
 export default function Bonuses() {
   const [records, setRecords] = useState<BonusRecord[]>([])
   const [client, setClient] = useState('')
-  const [storageReady, setStorageReady] = useState(false)
 
 
   const [modalOpen, setModalOpen] = useState(false)
@@ -187,70 +187,39 @@ export default function Bonuses() {
 
   const todayConfig = BONUS_CONFIG[dayOfWeek]
 
-  /*
-   * Cargar bonos del día
-   */
   useEffect(() => {
-    const saved = localStorage.getItem('babieca_daily_bonuses')
+    const loadBonuses = async () => {
+      const { data, error } = await supabase
+        .from('bonus_records')
+        .select('*')
+        .eq('date', todayKey)
+        .order('created_at', { ascending: false })
 
-    if (!saved) {
-      setRecords([])
-      setStorageReady(true)
-      return
+      if (error) {
+        console.error('Error cargando bonos:', error)
+        return
+      }
+
+      const mappedRecords: BonusRecord[] = (data || []).map(record => ({
+        id: record.id,
+        client: record.client,
+        step: record.step,
+        type: record.type,
+        kind: record.kind,
+        rechargeAmount: record.recharge_amount ?? undefined,
+        percentage: record.percentage ?? undefined,
+        bonusAmount: record.bonus_amount ?? undefined,
+        rollover: record.rollover ?? undefined,
+        date: record.date,
+        time: record.time,
+        status: record.status,
+        responsible: record.responsible,
+      }))
+
+      setRecords(mappedRecords)
     }
 
-    try {
-      const parsed = JSON.parse(saved)
-
-      if (parsed.date === todayKey) {
-        setRecords(Array.isArray(parsed.records) ? parsed.records : [])
-      } else {
-        localStorage.setItem(
-          'babieca_daily_bonuses',
-          JSON.stringify({
-            date: todayKey,
-            records: [],
-          }),
-        )
-
-        setRecords([])
-      }
-    } catch {
-      localStorage.removeItem('babieca_daily_bonuses')
-      setRecords([])
-    }
-
-    setStorageReady(true)
-  }, [todayKey])
-
-  /*
-   * Guardar bonos
-   */
-  useEffect(() => {
-    if (!storageReady) return
-
-    localStorage.setItem(
-      'babieca_daily_bonuses',
-      JSON.stringify({
-        date: todayKey,
-        records,
-      }),
-    )
-  }, [records, todayKey, storageReady])
-  /*
-   * Reinicio automático al cambiar de día.
-   * Revisamos cada minuto.
-   */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const currentKey = getTodayKey()
-
-      if (currentKey !== todayKey) {
-        setRecords([])
-      }
-    }, 60_000)
-
-    return () => clearInterval(interval)
+    loadBonuses()
   }, [todayKey])
 
   /*
@@ -298,7 +267,7 @@ export default function Bonuses() {
   /*
    * Asignar bono
    */
-  const handleAssignBonus = () => {
+  const handleAssignBonus = async () => {
     if (!selectedOption) return
 
     if (
@@ -336,8 +305,7 @@ export default function Bonuses() {
           selectedOption.kind === 'HIPISMO'
           ? amount
           : undefined,
-      percentage:
-        selectedOption.percentage,
+      percentage: selectedOption.percentage,
       bonusAmount,
       rollover: selectedOption.rollover,
       date: todayKey,
@@ -347,7 +315,29 @@ export default function Bonuses() {
       }),
       status: 'ENTREGADO',
       responsible: 'Usuario actual',
+    }
 
+    const { error } = await supabase
+      .from('bonus_records')
+      .insert({
+        id: newRecord.id,
+        client: newRecord.client,
+        step: newRecord.step,
+        type: newRecord.type,
+        kind: newRecord.kind,
+        recharge_amount: newRecord.rechargeAmount,
+        percentage: newRecord.percentage,
+        bonus_amount: newRecord.bonusAmount,
+        rollover: newRecord.rollover,
+        date: newRecord.date,
+        time: newRecord.time,
+        status: newRecord.status,
+        responsible: newRecord.responsible,
+      })
+
+    if (error) {
+      console.error('Error guardando bono:', error)
+      return
     }
 
     setRecords(prev => [newRecord, ...prev])
@@ -356,7 +346,6 @@ export default function Bonuses() {
     setSelectedOption(null)
     setRechargeAmount('')
   }
-
   const canAssignMore =
     todayConfig &&
     currentClientRecords.length < todayConfig.steps.length

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { WITHDRAWALS, EMPLOYEES } from '../data'
+import { EMPLOYEES } from '../data'
 import type { WithdrawalRecord, WithdrawalStatus } from '../data'
+import { supabase } from '../SupabaseClient'
 
 const GOLD = '#c9a84c'
 
@@ -29,26 +30,38 @@ const getTodayDate = () => {
 const TODAY_PREFIX = getTodayDate()
 
 export default function Withdrawals() {
-  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>(() => {
-    const saved = localStorage.getItem('babieca_withdrawals')
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
 
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return WITHDRAWALS
+  useEffect(() => {
+    const loadWithdrawals = async () => {
+      const { data, error } = await supabase
+        .from('withdrawals')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error cargando retiros:', error)
+        return
       }
+
+      const mappedWithdrawals: WithdrawalRecord[] = (data || []).map(
+        record => ({
+          id: record.id,
+          client: record.client,
+          amount: Number(record.amount),
+          country: record.country,
+          date: record.date,
+          status: record.status as WithdrawalStatus,
+          responsible: record.responsible,
+          rejectionReason: record.rejection_reason ?? undefined,
+        }),
+      )
+
+      setWithdrawals(mappedWithdrawals)
     }
 
-    return WITHDRAWALS
-  })
-  useEffect(() => {
-    localStorage.setItem(
-      'babieca_withdrawals',
-      JSON.stringify(withdrawals),
-    )
-    window.dispatchEvent(new Event('babieca_withdrawals_updated'))
-  }, [withdrawals])
+    loadWithdrawals()
+  }, [])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<WithdrawalStatus | 'ALL'>('ALL')
   const [addModal, setAddModal] = useState(false)
@@ -80,24 +93,43 @@ export default function Withdrawals() {
     return ok && (statusFilter === 'ALL' || w.status === statusFilter)
   })
 
-  const handleAdd = () => {
-    if (!form.client || !form.amount || !form.responsible || !form.country) return
+  const handleAdd = async () => {
+    if (!form.client || !form.amount || !form.responsible || !form.country) {
+      return
+    }
 
-    setWithdrawals(prev => [
-      {
-        id: `R${String(prev.length + 1).padStart(3, '0')}`,
-        client: form.client,
-        amount: parseFloat(form.amount),
-        country: form.country,
-        date: `${TODAY_PREFIX} ${new Date().toLocaleTimeString('es-ES', {
-          hour: '2-digit',
-          minute: '2-digit',
-        })}`,
-        status: 'PENDIENTE',
-        responsible: form.responsible,
-      },
-      ...prev,
-    ])
+    const newWithdrawal: WithdrawalRecord = {
+      id: `R${Date.now()}`,
+      client: form.client.trim(),
+      amount: parseFloat(form.amount),
+      country: form.country,
+      date: `${TODAY_PREFIX} ${new Date().toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`,
+      status: 'PENDIENTE',
+      responsible: form.responsible,
+    }
+
+    const { error } = await supabase
+      .from('withdrawals')
+      .insert({
+        id: newWithdrawal.id,
+        client: newWithdrawal.client,
+        amount: newWithdrawal.amount,
+        country: newWithdrawal.country,
+        date: newWithdrawal.date,
+        status: newWithdrawal.status,
+        responsible: newWithdrawal.responsible,
+        rejection_reason: null,
+      })
+
+    if (error) {
+      console.error('Error guardando retiro:', error)
+      return
+    }
+
+    setWithdrawals(prev => [newWithdrawal, ...prev])
 
     setAddModal(false)
 
@@ -109,10 +141,23 @@ export default function Withdrawals() {
     })
   }
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!confirm) return
 
     if (confirm.action === 'pagar') {
+      const { error } = await supabase
+        .from('withdrawals')
+        .update({
+          status: 'PAGADO',
+          rejection_reason: null,
+        })
+        .eq('id', confirm.id)
+
+      if (error) {
+        console.error('Error actualizando retiro:', error)
+        return
+      }
+
       setWithdrawals(prev =>
         prev.map(w =>
           w.id === confirm.id
@@ -131,13 +176,28 @@ export default function Withdrawals() {
 
     if (!rejectionReason.trim()) return
 
+    const reason = rejectionReason.trim()
+
+    const { error } = await supabase
+      .from('withdrawals')
+      .update({
+        status: 'RECHAZADO',
+        rejection_reason: reason,
+      })
+      .eq('id', confirm.id)
+
+    if (error) {
+      console.error('Error rechazando retiro:', error)
+      return
+    }
+
     setWithdrawals(prev =>
       prev.map(w =>
         w.id === confirm.id
           ? {
             ...w,
             status: 'RECHAZADO',
-            rejectionReason: rejectionReason.trim(),
+            rejectionReason: reason,
           }
           : w,
       ),

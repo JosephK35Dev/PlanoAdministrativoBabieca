@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ATTENDANCE_RECORDS, WEEKLY_SCHEDULES, } from '../data'
+import { WEEKLY_SCHEDULES, } from '../data'
 import { supabase } from '../SupabaseClient'
 import type { Employee, EmployeeStatus, AttendanceRecord, JornadaStatus } from '../data'
 
@@ -161,55 +161,60 @@ function Modal({
 export default function Employees() {
 
   const getEffectiveSchedule = (employeeId: string) => {
-    const saved = localStorage.getItem('babieca_schedules')
+    const schedule = schedules[employeeId]
 
-    const today = new Date()
-    const day = today.getDay()
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1)
-
-    const weekStart = new Date(today)
-    weekStart.setDate(diff)
-    weekStart.setHours(0, 0, 0, 0)
-
-    const weekKey = weekStart.toISOString().slice(0, 10)
-
-    // 1. Primero: horario modificado manualmente para esta semana
-    if (saved) {
-      try {
-        const schedules = JSON.parse(saved)
-        const override = schedules[employeeId]?.[weekKey]
-
-        if (override) {
-          return override
-        }
-      } catch {
-        // Si localStorage falla, continuamos con la rotación
-      }
+    if (schedule && schedule.length === 7) {
+      return schedule
     }
 
-    // 2. Horario de la rotación semanal
+    // Respaldo mientras se cargan los horarios
     const rotations = WEEKLY_SCHEDULES[employeeId]
 
     if (!rotations || rotations.length === 0) {
       return Array(7).fill('—')
     }
 
-    // La rotación comienza en la semana del 31/08/2026
-    const rotationAnchor = new Date('2026-08-31T00:00:00')
+    const today = new Date()
+
+    const day = today.getDay()
+
+    const diff =
+      today.getDate() -
+      day +
+      (day === 0 ? -6 : 1)
+
+    const weekStart = new Date(today)
+
+    weekStart.setDate(diff)
+    weekStart.setHours(0, 0, 0, 0)
+
+    // La rotación comienza el lunes 07/09/2026
+    const rotationAnchor = new Date(
+      2026,
+      8,
+      7,
+    )
 
     const weeksSinceAnchor = Math.floor(
-      (weekStart.getTime() - rotationAnchor.getTime()) /
-      (7 * 24 * 60 * 60 * 1000)
+      (weekStart.getTime() -
+        rotationAnchor.getTime()) /
+      (7 * 24 * 60 * 60 * 1000),
     )
 
     const rotationIndex =
-      ((weeksSinceAnchor % rotations.length) + rotations.length) %
+      ((weeksSinceAnchor % rotations.length) +
+        rotations.length) %
       rotations.length
 
     return rotations[rotationIndex]
   }
+
   const [employees, setEmployees] = useState<Employee[]>([])
   const [employeesLoading, setEmployeesLoading] = useState(true)
+
+  const [schedules, setSchedules] = useState<
+    Record<string, string[]>
+  >({})
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -233,31 +238,131 @@ export default function Employees() {
     loadEmployees()
   }, [])
 
+  useEffect(() => {
+    const loadSchedules = async () => {
+      const { data, error } = await supabase
+        .from('schedules')
+        .select('*')
+
+      if (error) {
+        console.error(
+          'Error cargando horarios:',
+          error,
+        )
+        return
+      }
+
+      const mappedSchedules: Record<
+        string,
+        string[]
+      > = {}
+
+        ; (data || []).forEach(schedule => {
+          const days = [
+            schedule.monday,
+            schedule.tuesday,
+            schedule.wednesday,
+            schedule.thursday,
+            schedule.friday,
+            schedule.saturday,
+            schedule.sunday,
+          ]
+
+          /*
+           * Determinamos cuál es la semana actual
+           * según la rotación que comienza el
+           * 07/09/2026.
+           */
+          const today = new Date()
+
+          const day = today.getDay()
+
+          const diff =
+            today.getDate() -
+            day +
+            (day === 0 ? -6 : 1)
+
+          const weekStart = new Date(today)
+
+          weekStart.setDate(diff)
+          weekStart.setHours(0, 0, 0, 0)
+
+          const rotationAnchor = new Date(
+            2026,
+            8,
+            7,
+          )
+
+          const weeksSinceAnchor = Math.floor(
+            (weekStart.getTime() -
+              rotationAnchor.getTime()) /
+            (7 * 24 * 60 * 60 * 1000),
+          )
+
+          const weekIndex =
+            ((weeksSinceAnchor % 4) + 4) % 4
+
+          /*
+           * Solo usamos el registro de la semana
+           * que corresponde actualmente.
+           */
+          if (schedule.week_number - 1 === weekIndex) {
+            mappedSchedules[
+              schedule.employee_id
+            ] = days
+          }
+        })
+
+      setSchedules(mappedSchedules)
+    }
+
+    loadSchedules()
+  }, [])
+
   const [attendance, setAttendance] =
-    useState<AttendanceRecord[]>(() => {
-      const saved = localStorage.getItem('babieca_attendance')
+    useState<AttendanceRecord[]>([])
 
-      if (!saved) {
-        return ATTENDANCE_RECORDS
+  const [attendanceLoading, setAttendanceLoading] =
+    useState(true)
+
+  useEffect(() => {
+    const loadAttendance = async () => {
+      setAttendanceLoading(true)
+
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .order('created_at', {
+          ascending: false,
+        })
+
+      if (error) {
+        console.error(
+          'Error cargando asistencia:',
+          error,
+        )
+
+        setAttendanceLoading(false)
+        return
       }
 
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return ATTENDANCE_RECORDS
-      }
-    })
+      const mappedAttendance: AttendanceRecord[] =
+        (data || []).map(record => ({
+          id: record.id,
+          employeeId: record.employee_id,
+          date: record.date,
+          arrival: record.arrival,
+          departure: record.departure,
+          hours: record.hours,
+          notes: record.notes,
+        }))
 
-  const saveAttendance = (
-    updated: AttendanceRecord[],
-  ) => {
-    setAttendance(updated)
+      setAttendance(mappedAttendance)
+      setAttendanceLoading(false)
+    }
 
-    localStorage.setItem(
-      'babieca_attendance',
-      JSON.stringify(updated),
-    )
-  }
+    loadAttendance()
+  }, [])
 
 
   const [search, setSearch] = useState('')
@@ -330,23 +435,36 @@ export default function Employees() {
 
     const now = new Date()
 
-    const currentMinutes =
+    let currentMinutes =
       now.getHours() * 60 + now.getMinutes()
 
     const [startHour, startMinute] =
-      startTime.split(':').map(Number)
+      startTime.trim().split(':').map(Number)
 
     const startMinutes =
       startHour * 60 + startMinute
 
     const [endHour, endMinute] =
-      endTime.split(':').map(Number)
+      endTime.trim().split(':').map(Number)
 
     let endMinutes =
       endHour * 60 + endMinute
 
+    /*
+     * Turnos que atraviesan medianoche.
+     * Ejemplo: 18:00–02:00
+     */
     if (endMinutes <= startMinutes) {
       endMinutes += 24 * 60
+
+      /*
+       * Si actualmente estamos después de medianoche,
+       * consideramos la hora como perteneciente al
+       * día anterior.
+       */
+      if (currentMinutes < startMinutes) {
+        currentMinutes += 24 * 60
+      }
     }
 
     // Si ya registró salida
@@ -453,24 +571,48 @@ export default function Employees() {
     setDepartureObs('')
   }
 
-  const handleArrival = () => {
+  const handleArrival = async () => {
     if (!selectedEmp || !arrivalTime) return
 
     const existing =
       getTodayAttendance(selectedEmp.id)
 
     if (existing) {
-      const updated = attendance.map(record =>
-        record.id === existing.id
-          ? {
-            ...record,
-            arrival: arrivalTime,
-            notes: arrivalObs,
-          }
-          : record,
-      )
+      const { data, error } = await supabase
+        .from('attendance')
+        .update({
+          arrival: arrivalTime,
+          notes: arrivalObs,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
 
-      saveAttendance(updated)
+      if (error) {
+        console.error(
+          'Error actualizando llegada:',
+          error,
+        )
+        return
+      }
+
+      const updatedRecord: AttendanceRecord = {
+        id: data.id,
+        employeeId: data.employee_id,
+        date: data.date,
+        arrival: data.arrival,
+        departure: data.departure,
+        hours: data.hours,
+        notes: data.notes,
+      }
+
+      setAttendance(prev =>
+        prev.map(record =>
+          record.id === existing.id
+            ? updatedRecord
+            : record,
+        ),
+      )
     } else {
       const newRecord: AttendanceRecord = {
         id: `A${Date.now()}`,
@@ -480,18 +622,46 @@ export default function Employees() {
         notes: arrivalObs,
       }
 
-      const updated = [
-        newRecord,
-        ...attendance,
-      ]
+      const { data, error } = await supabase
+        .from('attendance')
+        .insert({
+          id: newRecord.id,
+          employee_id: newRecord.employeeId,
+          date: newRecord.date,
+          arrival: newRecord.arrival,
+          notes: newRecord.notes,
+        })
+        .select()
+        .single()
 
-      saveAttendance(updated)
+      if (error) {
+        console.error(
+          'Error registrando llegada:',
+          error,
+        )
+        return
+      }
+
+      const savedRecord: AttendanceRecord = {
+        id: data.id,
+        employeeId: data.employee_id,
+        date: data.date,
+        arrival: data.arrival,
+        departure: data.departure,
+        hours: data.hours,
+        notes: data.notes,
+      }
+
+      setAttendance(prev => [
+        savedRecord,
+        ...prev,
+      ])
     }
 
     closeArrivalModal()
   }
 
-  const handleDeparture = () => {
+  const handleDeparture = async () => {
     if (!selectedEmp || !departureTime) return
 
     const existing =
@@ -504,18 +674,42 @@ export default function Employees() {
       departureTime,
     )
 
-    const updated = attendance.map(record =>
-      record.id === existing.id
-        ? {
-          ...record,
-          departure: departureTime,
-          hours,
-          notes: departureObs,
-        }
-        : record,
-    )
+    const { data, error } = await supabase
+      .from('attendance')
+      .update({
+        departure: departureTime,
+        hours,
+        notes: departureObs,
+      })
+      .eq('id', existing.id)
+      .select()
+      .single()
 
-    saveAttendance(updated)
+    if (error) {
+      console.error(
+        'Error registrando salida:',
+        error,
+      )
+      return
+    }
+
+    const updatedRecord: AttendanceRecord = {
+      id: data.id,
+      employeeId: data.employee_id,
+      date: data.date,
+      arrival: data.arrival,
+      departure: data.departure,
+      hours: data.hours,
+      notes: data.notes,
+    }
+
+    setAttendance(prev =>
+      prev.map(record =>
+        record.id === existing.id
+          ? updatedRecord
+          : record,
+      ),
+    )
 
     closeDepartureModal()
   }
