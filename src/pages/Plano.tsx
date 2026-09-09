@@ -438,8 +438,11 @@ export default function Plano() {
     )
 
     setSaved(true)
-  }, [editor, selectedId, selectedDocument])
-
+  }, [
+    editor,
+    selectedId,
+    documentContents[selectedId],
+  ])
   /*
    * AUTOSAVE EN SUPABASE
    *
