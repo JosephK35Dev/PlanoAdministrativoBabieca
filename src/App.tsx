@@ -3,8 +3,10 @@ import Dashboard from './pages/Dashboard'
 import Employees from './pages/Employees'
 import Schedules from './pages/Schedules'
 import Bonuses from './pages/Bonuses'
+import RegistrationBonuses from './pages/RegistrationBonuses'
 import Withdrawals from './pages/Withdrawals'
 import Plano from './pages/Plano'
+import Accounting from './pages/Accounting'
 import { supabase } from './SupabaseClient'
 import type { Page } from './data'
 
@@ -17,7 +19,9 @@ const NAV_ITEMS: { id: Page; icon: string; label: string }[] = [
   { id: 'employees', icon: '👥', label: 'Empleados' },
   { id: 'schedules', icon: '🕐', label: 'Horarios' },
   { id: 'bonuses', icon: '🎁', label: 'Bonos' },
+  { id: 'registrationBonuses', icon: '🎟️', label: 'Bonos por registro' },
   { id: 'withdrawals', icon: '💰', label: 'Retiros' },
+  { id: 'accounting', icon: '🧮', label: 'Contabilidad' },
   { id: 'plano', icon: '📋', label: 'Plano' },
 ]
 
@@ -26,6 +30,8 @@ const PAGE_TITLES: Record<Page, string> = {
   employees: 'Empleados',
   schedules: 'Horarios',
   bonuses: 'Bonos',
+  registrationBonuses: 'Bonos por registro',
+  accounting: 'Contabilidad/Cuadres',
   withdrawals: 'Retiros',
   plano: 'Plano',
 }
@@ -84,12 +90,14 @@ export default function App() {
       case 'employees': return <Employees />
       case 'schedules': return <Schedules />
       case 'bonuses': return <Bonuses />
+      case 'registrationBonuses': return <RegistrationBonuses />
       case 'withdrawals': return <Withdrawals />
+      case 'accounting': return <Accounting />
       case 'plano': return <Plano />
     }
   }
 
-  
+
 
   if (!authorized) {
     return (
@@ -260,7 +268,7 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2">
-            
+
 
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer"
               style={{ backgroundColor: 'rgba(201,168,76,0.12)', color: GOLD, border: '1px solid rgba(201,168,76,0.25)' }}>

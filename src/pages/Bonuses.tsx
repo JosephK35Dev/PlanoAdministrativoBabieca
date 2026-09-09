@@ -290,9 +290,11 @@ export default function Bonuses() {
     const percentage = selectedOption.percentage || 0
 
     const bonusAmount =
-      percentage > 0
-        ? amount * (percentage / 100)
-        : undefined
+      selectedOption.percentage === 80
+        ? undefined
+        : percentage > 0
+          ? amount * (percentage / 100)
+          : undefined
 
     const newRecord: BonusRecord = {
       id: `B${Date.now()}`,
@@ -636,11 +638,7 @@ export default function Bonuses() {
                             </span>
 
                             <span className="text-zinc-300">
-                              {formatMoney(
-                                Number(
-                                  rechargeAmount,
-                                ),
-                              )}
+                              {formatMoney(Number(rechargeAmount))}
                             </span>
                           </div>
 
@@ -655,13 +653,12 @@ export default function Bonuses() {
                                 color: GOLD,
                               }}
                             >
-                              {formatMoney(
-                                Number(
-                                  rechargeAmount,
-                                ) *
-                                (selectedOption.percentage /
-                                  100),
-                              )}
+                              {selectedOption.percentage === 80
+                                ? 'Revisar tope de bono'
+                                : formatMoney(
+                                  Number(rechargeAmount) *
+                                  (selectedOption.percentage / 100),
+                                )}
                             </span>
                           </div>
                         </div>

@@ -124,6 +124,20 @@ export default function Dashboard({
   const [todayBonuses, setTodayBonuses] = useState<BonusRecord[]>([])
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([])
   const [withdrawals, setWithdrawals] = useState<WithdrawalRecord[]>([])
+  type RegistrationBonus = {
+    id: string
+    client: string
+    country: string
+    bonusType: 'Registro' | 'Perdido'
+    recharged: boolean
+    date: string
+    time: string
+    responsible: string
+    createdAt: string
+  }
+
+  const [registrationBonuses, setRegistrationBonuses] =
+    useState<RegistrationBonus[]>([])
   const [employees, setEmployees] = useState(EMPLOYEES)
 
   /*
@@ -207,6 +221,42 @@ export default function Dashboard({
 
     setWithdrawals(mappedWithdrawals)
   }
+  /*
+   * ============================================================
+   * CARGAR BONOS POR REGISTRO DESDE SUPABASE
+   * ============================================================
+   */
+  const loadRegistrationBonuses = async () => {
+    const { data, error } = await supabase
+      .from('registration_bonuses')
+      .select('*')
+      .order('created_at', {
+        ascending: false,
+      })
+
+    if (error) {
+      console.error(
+        'Error cargando bonos por registro:',
+        error,
+      )
+      return
+    }
+
+    const mappedRecords: RegistrationBonus[] =
+      (data || []).map(record => ({
+        id: record.id,
+        client: record.client,
+        country: record.country,
+        bonusType: record.bonus_type,
+        recharged: record.recharged,
+        date: record.date,
+        time: record.time,
+        responsible: record.responsible,
+        createdAt: record.created_at,
+      }))
+
+    setRegistrationBonuses(mappedRecords)
+  }
 
   /*
    * ============================================================
@@ -280,6 +330,7 @@ export default function Dashboard({
       await Promise.all([
         loadBonuses(),
         loadWithdrawals(),
+        loadRegistrationBonuses(),
         loadEmployees(),
       ])
 
@@ -295,6 +346,7 @@ export default function Dashboard({
     const interval = window.setInterval(() => {
       loadBonuses()
       loadWithdrawals()
+      loadRegistrationBonuses()
       loadEmployees()
       loadAttendance()
     }, 10000)
@@ -303,9 +355,9 @@ export default function Dashboard({
      * También escuchamos cambios de asistencia realizados
      * dentro de esta misma aplicación.
      */
-    
 
-    
+
+
   }, [])
 
   /*
@@ -331,6 +383,11 @@ export default function Dashboard({
     withdrawal =>
       withdrawal.date.startsWith(TODAY_PREFIX),
   )
+
+  const todayRegistrationBonuses =
+    registrationBonuses.filter(
+      record => record.date === getTodayKey(),
+    )
 
   const activeEmployees = employees.filter(
     employee =>
@@ -424,6 +481,22 @@ export default function Dashboard({
           : GOLD,
     })),
 
+    ...todayRegistrationBonuses.map(record => ({
+      time: record.time || '00:00',
+
+      action:
+        record.bonusType === 'Registro'
+          ? 'Bono por registro'
+          : 'Bono perdido',
+
+      detail: `${record.client} · ${record.country}`,
+
+      dot:
+        record.bonusType === 'Registro'
+          ? GOLD
+          : '#a1a1aa',
+    })),
+
     ...todayWithdrawals.map(withdrawal => ({
       time: withdrawal.date.includes(' ')
         ? withdrawal.date.split(' ')[1]
@@ -478,9 +551,19 @@ export default function Dashboard({
         page: 'bonuses',
       },
       {
+        icon: '🎟️',
+        label: 'Bonos por registro',
+        page: 'registrationBonuses',
+      },
+      {
         icon: '💰',
         label: 'Retiros',
         page: 'withdrawals',
+      },
+      {
+        icon: '🧮',
+        label: 'Contabilidad',
+        page: 'accounting',
       },
       {
         icon: '📋',

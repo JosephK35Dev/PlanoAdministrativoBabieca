@@ -237,6 +237,9 @@ function ToolbarButton({
 
 export default function Plano() {
   const [documents, setDocuments] = useState<PlanoDocument[]>([])
+  const [documentContents, setDocumentContents] = useState<
+    Record<string, string>
+  >({})
   const [selectedId, setSelectedId] = useState('')
   const [saved, setSaved] = useState(true)
   const [loading, setLoading] = useState(true)
@@ -250,7 +253,7 @@ export default function Plano() {
     const loadDocuments = async () => {
       const { data, error } = await supabase
         .from('plano_documents')
-        .select('*')
+        .select('id, title, position, updated_at')
         .order('position', {
           ascending: true,
         })
@@ -269,19 +272,23 @@ export default function Plano() {
        * documentos iniciales automáticamente.
        */
       if (!data || data.length === 0) {
-        const initialDocuments = createInitialDocuments()
+        const initialDocuments =
+          createInitialDocuments()
 
-        const rows = initialDocuments.map(document => ({
-          id: document.id,
-          title: document.title,
-          content: document.content,
-          position: document.position,
-          updated_at: document.updatedAt,
-        }))
+        const rows = initialDocuments.map(
+          document => ({
+            id: document.id,
+            title: document.title,
+            content: document.content,
+            position: document.position,
+            updated_at: document.updatedAt,
+          }),
+        )
 
-        const { error: insertError } = await supabase
-          .from('plano_documents')
-          .insert(rows)
+        const { error: insertError } =
+          await supabase
+            .from('plano_documents')
+            .insert(rows)
 
         if (insertError) {
           console.error(
@@ -293,20 +300,37 @@ export default function Plano() {
         }
 
         setDocuments(initialDocuments)
-        setSelectedId(initialDocuments[0]?.id ?? '')
+
+        setDocumentContents(
+          Object.fromEntries(
+            initialDocuments.map(document => [
+              document.id,
+              document.content,
+            ]),
+          ),
+        )
+
+        setSelectedId(
+          initialDocuments[0]?.id ?? '',
+        )
+
         setLoading(false)
         return
       }
 
-      const mappedDocuments: PlanoDocument[] = data.map(
-        document => ({
+      /*
+       * Solo cargamos los metadatos inicialmente.
+       * El contenido se carga cuando se selecciona
+       * cada documento.
+       */
+      const mappedDocuments: PlanoDocument[] =
+        data.map(document => ({
           id: document.id,
           title: document.title,
-          content: document.content,
+          content: '',
           position: document.position,
           updatedAt: document.updated_at,
-        }),
-      )
+        }))
 
       setDocuments(mappedDocuments)
       setSelectedId(mappedDocuments[0]?.id ?? '')
@@ -316,13 +340,52 @@ export default function Plano() {
     loadDocuments()
   }, [])
 
-  const selectedDocument = useMemo(
-    () =>
+  useEffect(() => {
+    if (!selectedId) return
+
+    if (documentContents[selectedId] !== undefined) {
+      return
+    }
+
+    const loadSelectedDocument = async () => {
+      const { data, error } = await supabase
+        .from('plano_documents')
+        .select('content')
+        .eq('id', selectedId)
+        .single()
+
+      if (error) {
+        console.error(
+          'Error cargando contenido del documento:',
+          error,
+        )
+        return
+      }
+
+      setDocumentContents(current => ({
+        ...current,
+        [selectedId]: data.content,
+      }))
+    }
+
+    loadSelectedDocument()
+  }, [selectedId, documentContents])
+
+  const selectedDocument = useMemo(() => {
+    const document =
       documents.find(
         document => document.id === selectedId,
-      ) ?? documents[0],
-    [documents, selectedId],
-  )
+      ) ?? documents[0]
+
+    if (!document) return undefined
+
+    return {
+      ...document,
+      content:
+        documentContents[document.id] ??
+        '',
+    }
+  }, [documents, selectedId, documentContents])
 
   /*
    * EDITOR

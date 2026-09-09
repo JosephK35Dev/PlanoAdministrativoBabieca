@@ -3,6 +3,8 @@ export type Page =
   | 'employees'
   | 'schedules'
   | 'bonuses'
+  | 'registrationBonuses'
+  | 'accounting'
   | 'withdrawals'
   | 'plano'
 
