@@ -408,17 +408,25 @@ export default function Plano() {
     immediatelyRender: false,
 
     onUpdate: ({ editor }) => {
+      const content = editor.getHTML()
+      const updatedAt = new Date().toISOString()
+
       setDocuments(current =>
         current.map(document =>
           document.id === selectedId
             ? {
               ...document,
-              content: editor.getHTML(),
-              updatedAt: new Date().toISOString(),
+              content,
+              updatedAt,
             }
             : document,
         ),
       )
+
+      setDocumentContents(current => ({
+        ...current,
+        [selectedId]: content,
+      }))
 
       setSaved(false)
     },
@@ -450,24 +458,30 @@ export default function Plano() {
    * antes de guardar.
    */
   useEffect(() => {
-    if (loading || !documents.length) return
+    if (loading || !selectedId) return
+
+    const content = documentContents[selectedId]
+
+    if (content === undefined) return
+
+    const currentDocument = documents.find(
+      document => document.id === selectedId,
+    )
+
+    if (!currentDocument) return
 
     const timeout = window.setTimeout(async () => {
-      const updatedDocument = documents.find(
-        document => document.id === selectedId,
-      )
-
-      if (!updatedDocument) return
+      const updatedAt = new Date().toISOString()
 
       const { error } = await supabase
         .from('plano_documents')
         .update({
-          title: updatedDocument.title,
-          content: updatedDocument.content,
-          position: updatedDocument.position,
-          updated_at: updatedDocument.updatedAt,
+          title: currentDocument.title,
+          content,
+          position: currentDocument.position,
+          updated_at: updatedAt,
         })
-        .eq('id', updatedDocument.id)
+        .eq('id', selectedId)
 
       if (error) {
         console.error(
@@ -485,6 +499,7 @@ export default function Plano() {
       window.clearTimeout(timeout)
     }
   }, [
+    documentContents,
     documents,
     selectedId,
     loading,
