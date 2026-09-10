@@ -73,9 +73,8 @@ const BONUS_CONFIG: Record<number, { name: string; steps: BonusStep[] }> = {
         title: 'Primer bono',
         options: [
 
-          { label: '50%', kind: 'PORCENTAJE', percentage: 50, rollover: 'X5' },
-          { label: '60%', kind: 'PORCENTAJE', percentage: 60, rollover: 'X4' },
-          { label: '80%', kind: 'PORCENTAJE', percentage: 80, rollover: 'X3' },
+          { label: '30%', kind: 'PORCENTAJE', percentage: 30, rollover: 'X6' },
+          
         ],
       },
       {
@@ -102,9 +101,7 @@ const BONUS_CONFIG: Record<number, { name: string; steps: BonusStep[] }> = {
         title: 'Primer bono',
         options: [
 
-          { label: '50%', kind: 'PORCENTAJE', percentage: 50, rollover: 'X5' },
-          { label: '60%', kind: 'PORCENTAJE', percentage: 60, rollover: 'X4' },
-          { label: '80%', kind: 'PORCENTAJE', percentage: 80, rollover: 'X3' },
+          { label: '30%', kind: 'PORCENTAJE', percentage: 30, rollover: 'X6' },
         ],
       },
       {
