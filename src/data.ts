@@ -5,6 +5,7 @@ export type Page =
   | 'bonuses'
   | 'registrationBonuses'
   | 'accounting'
+  | 'filter'
   | 'withdrawals'
   | 'plano'
 

@@ -14,7 +14,7 @@ const GOLD = '#c9a84c'
 const ACCESS_PASSWORD = 'babieca2026'
 const ACCESS_STORAGE_KEY = 'babieca_access_authorized'
 
-const NAV_ITEMS: { id: Page; icon: string; label: string }[] = [
+const NAV_ITEMS: { id: Page; icon: string; label: string; url?: string }[] = [
   { id: 'dashboard', icon: '🏠', label: 'Inicio' },
   { id: 'employees', icon: '👥', label: 'Empleados' },
   { id: 'schedules', icon: '🕐', label: 'Horarios' },
@@ -22,6 +22,7 @@ const NAV_ITEMS: { id: Page; icon: string; label: string }[] = [
   { id: 'registrationBonuses', icon: '🎟️', label: 'Bonos por registro' },
   { id: 'withdrawals', icon: '💰', label: 'Retiros' },
   { id: 'accounting', icon: '🧮', label: 'Contabilidad' },
+  { id: 'filter', icon: '📈', label: 'Filtro Pasarela Pago', url: 'https://josephk35dev.github.io/Filtro-Pasarela-Pagos/' },
   { id: 'plano', icon: '📋', label: 'Plano' },
 ]
 
@@ -32,6 +33,7 @@ const PAGE_TITLES: Record<Page, string> = {
   bonuses: 'Bonos',
   registrationBonuses: 'Bonos por registro',
   accounting: 'Contabilidad/Cuadres',
+  filter: 'Filtro Pasarela Pago',
   withdrawals: 'Retiros',
   plano: 'Plano',
 }
@@ -216,8 +218,15 @@ export default function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => { setCurrentPage(item.id); setSidebarOpen(false) }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left"
+                onClick={() => {
+                  if (item.url) {
+                    window.open(item.url, '_blank', 'noopener,noreferrer')
+                    return
+                  }
+
+                  setCurrentPage(item.id)
+                  setSidebarOpen(false)
+                }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all text-left"
                 style={{
                   backgroundColor: active ? 'rgba(201,168,76,0.1)' : 'transparent',
                   color: active ? GOLD : '#71717a',

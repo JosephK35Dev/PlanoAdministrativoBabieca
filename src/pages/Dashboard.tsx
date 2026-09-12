@@ -533,7 +533,8 @@ export default function Dashboard({
   const quickLinks: {
     icon: string
     label: string
-    page: Page
+    page?: Page
+    url?: string
   }[] = [
       {
         icon: '👥',
@@ -564,6 +565,11 @@ export default function Dashboard({
         icon: '🧮',
         label: 'Contabilidad',
         page: 'accounting',
+      },
+      {
+        icon: '📈',
+        label: 'Filtro Pasarela Pago',
+        url: 'https://josephk35dev.github.io/Filtro-Pasarela-Pagos/',
       },
       {
         icon: '📋',
@@ -765,8 +771,17 @@ export default function Dashboard({
 
             {quickLinks.map(item => (
               <button
-                key={item.page}
-                onClick={() => navigate(item.page)}
+                key={item.url ?? item.page}
+                onClick={() => {
+                  if (item.url) {
+                    window.open(item.url, '_blank', 'noopener,noreferrer')
+                    return
+                  }
+
+                  if (item.page) {
+                    navigate(item.page)
+                  }
+                }}
                 className="flex flex-col items-center gap-2 p-4 rounded-lg bg-zinc-800/40 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all text-zinc-400 hover:text-zinc-100"
               >
                 <span className="text-xl">{item.icon}</span>
