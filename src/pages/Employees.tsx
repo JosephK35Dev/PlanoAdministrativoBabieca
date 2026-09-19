@@ -10,6 +10,9 @@ import type {
 } from '../data'
 
 const GOLD = '#c9a84c'
+const NIGHT_SHIFT_EMPLOYEE_ID = '007'
+const NIGHT_SHIFT_START = '22:00'
+const NIGHT_SHIFT_END = '08:00'
 
 const JORNADA_CFG: Record<
   JornadaStatus,
@@ -188,6 +191,18 @@ export default function Employees() {
   const getEffectiveSchedule = (
     employeeId: string,
   ) => {
+    if (employeeId === NIGHT_SHIFT_EMPLOYEE_ID) {
+      return [
+        '22:00–08:00',
+        '22:00–08:00',
+        '22:00–08:00',
+        '22:00–08:00',
+        '22:00–08:00',
+        '22:00–08:00',
+        '22:00–08:00',
+      ]
+    }
+    
     const schedule = schedules[employeeId]
 
     if (schedule && schedule.length === 7) {
@@ -225,7 +240,7 @@ export default function Employees() {
     const weeksSinceAnchor = Math.floor(
       (weekStart.getTime() -
         rotationAnchor.getTime()) /
-        (7 * 24 * 60 * 60 * 1000),
+      (7 * 24 * 60 * 60 * 1000),
     )
 
     const rotationIndex =
@@ -291,64 +306,64 @@ export default function Employees() {
         string[]
       > = {}
 
-      ;(data || []).forEach(schedule => {
-        const days = [
-          schedule.monday,
-          schedule.tuesday,
-          schedule.wednesday,
-          schedule.thursday,
-          schedule.friday,
-          schedule.saturday,
-          schedule.sunday,
-        ]
+        ; (data || []).forEach(schedule => {
+          const days = [
+            schedule.monday,
+            schedule.tuesday,
+            schedule.wednesday,
+            schedule.thursday,
+            schedule.friday,
+            schedule.saturday,
+            schedule.sunday,
+          ]
 
-        /*
-         * Determinamos cuál es la semana actual
-         * según la rotación que comienza el
-         * 07/09/2026.
-         */
-        const today = new Date()
+          /*
+           * Determinamos cuál es la semana actual
+           * según la rotación que comienza el
+           * 07/09/2026.
+           */
+          const today = new Date()
 
-        const day = today.getDay()
+          const day = today.getDay()
 
-        const diff =
-          today.getDate() -
-          day +
-          (day === 0 ? -6 : 1)
+          const diff =
+            today.getDate() -
+            day +
+            (day === 0 ? -6 : 1)
 
-        const weekStart = new Date(today)
+          const weekStart = new Date(today)
 
-        weekStart.setDate(diff)
-        weekStart.setHours(0, 0, 0, 0)
+          weekStart.setDate(diff)
+          weekStart.setHours(0, 0, 0, 0)
 
-        const rotationAnchor = new Date(
-          2026,
-          8,
-          7,
-        )
+          const rotationAnchor = new Date(
+            2026,
+            8,
+            7,
+          )
 
-        const weeksSinceAnchor = Math.floor(
-          (weekStart.getTime() -
-            rotationAnchor.getTime()) /
+          const weeksSinceAnchor = Math.floor(
+            (weekStart.getTime() -
+              rotationAnchor.getTime()) /
             (7 * 24 * 60 * 60 * 1000),
-        )
+          )
 
-        const weekIndex =
-          ((weeksSinceAnchor % 4) + 4) % 4
+          const weekIndex =
+            ((weeksSinceAnchor % 4) + 4) % 4
 
-        /*
-         * Solo usamos el registro de la semana
-         * que corresponde actualmente.
-         */
-        if (
-          schedule.week_number - 1 ===
-          weekIndex
-        ) {
-          mappedSchedules[
-            schedule.employee_id
-          ] = days
-        }
-      })
+          /*
+           * Solo usamos el registro de la semana
+           * que corresponde actualmente.
+           */
+          if (
+            schedule.week_number - 1 ===
+            weekIndex
+          ) {
+            mappedSchedules[
+              schedule.employee_id
+            ] = days
+          }
+        })
 
       setSchedules(mappedSchedules)
     }
@@ -447,10 +462,31 @@ export default function Employees() {
   const getTodayAttendance = (
     employeeId: string,
   ) => {
+    let attendanceDate = dateStr
+
+    // El empleado 007 tiene turno nocturno:
+    // 22:00 de un día hasta las 08:00 del día siguiente.
+    // Si estamos antes de las 08:00, buscamos el registro
+    // del día anterior, porque ahí comenzó su turno.
+    if (
+      employeeId === NIGHT_SHIFT_EMPLOYEE_ID &&
+      new Date().getHours() < 8
+    ) {
+      const yesterday = new Date()
+      yesterday.setDate(yesterday.getDate() - 1)
+
+      attendanceDate =
+        yesterday.toLocaleDateString('es-ES', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+    }
+
     return attendance.find(
       record =>
         record.employeeId === employeeId &&
-        record.date === dateStr,
+        record.date === attendanceDate,
     )
   }
 
@@ -663,21 +699,21 @@ export default function Employees() {
       e =>
         e.status === 'ACTIVO' &&
         getJornadaStatus(e.id) ===
-          'EN_TURNO',
+        'EN_TURNO',
     ).length,
 
     noArrival: employees.filter(
       e =>
         e.status === 'ACTIVO' &&
         getJornadaStatus(e.id) ===
-          'SIN_LLEGADA',
+        'SIN_LLEGADA',
     ).length,
 
     finished: employees.filter(
       e =>
         e.status === 'ACTIVO' &&
         getJornadaStatus(e.id) ===
-          'JORNADA_FINALIZADA',
+        'JORNADA_FINALIZADA',
     ).length,
   }
 
@@ -965,7 +1001,7 @@ export default function Employees() {
     setEmployees(prev =>
       prev.map(employee =>
         employee.id ===
-        editingEmployee.id
+          editingEmployee.id
           ? (data as Employee)
           : employee,
       ),
@@ -1107,7 +1143,7 @@ export default function Employees() {
                         className="px-3 py-2 text-sm rounded-lg border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                       >
                         {emp.status ===
-                        'ACTIVO'
+                          'ACTIVO'
                           ? 'Desactivar empleado'
                           : 'Activar empleado'}
                       </button>
@@ -1146,7 +1182,7 @@ export default function Employees() {
 
                     <tbody className="divide-y divide-zinc-800/50">
                       {history.length ===
-                      0 ? (
+                        0 ? (
                         <tr>
                           <td
                             colSpan={5}
@@ -1307,8 +1343,8 @@ export default function Employees() {
               onChange={e =>
                 setStatusFilter(
                   e.target.value as
-                    | JornadaStatus
-                    | 'ALL',
+                  | JornadaStatus
+                  | 'ALL',
                 )
               }
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-400 focus:outline-none cursor-pointer"
@@ -1516,7 +1552,7 @@ export default function Employees() {
                             {employee.status ===
                               'ACTIVO' &&
                               jornadaStatus ===
-                                'EN_TURNO' && (
+                              'EN_TURNO' && (
                                 <button
                                   onClick={() =>
                                     openDepartureModal(
@@ -1700,7 +1736,7 @@ export default function Employees() {
                     .filter(
                       employee =>
                         employee.status ===
-                          'ACTIVO' &&
+                        'ACTIVO' &&
                         !getTodayAttendance(
                           employee.id,
                         ) &&
@@ -1873,7 +1909,7 @@ export default function Employees() {
                     .filter(
                       employee =>
                         employee.status ===
-                          'ACTIVO' &&
+                        'ACTIVO' &&
                         getJornadaStatus(
                           employee.id,
                         ) === 'EN_TURNO',

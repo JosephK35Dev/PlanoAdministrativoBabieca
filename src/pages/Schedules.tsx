@@ -88,7 +88,7 @@ export default function Schedules() {
   }, [])
 
   const [addModal, setAddModal] = useState(false)
-  
+
 
   const [form, setForm] = useState({ empId: '', dayIdx: '0', start: '08:00', end: '16:00', special: '' })
 
@@ -116,9 +116,10 @@ export default function Schedules() {
   })()
 
   const getSchedule = (empId: string) => {
-    
-
-    
+    const targetWeek =
+      empId === '007'
+        ? 1
+        : rotationWeek
 
     // Buscar el horario correspondiente en Supabase
     const schedule = schedules.find(
@@ -145,18 +146,10 @@ export default function Schedules() {
     if (!form.empId) return
 
     const dayIdx = parseInt(form.dayIdx)
-    const value = form.special || `${form.start}–${form.end}`
 
-    const schedule = schedules.find(
-      item =>
-        item.employee_id === form.empId &&
-        item.week_number === rotationWeek,
-    )
-
-    if (!schedule) {
-      console.error('No se encontró el horario para este empleado')
-      return
-    }
+    const value =
+      form.special ||
+      `${form.start}–${form.end}`
 
     const columns = [
       'monday',
@@ -170,30 +163,84 @@ export default function Schedules() {
 
     const column = columns[dayIdx]
 
-    const { error } = await supabase
-      .from('schedules')
-      .update({
+    // El empleado 007 tiene horario fijo y NO usa la rotación.
+    const targetWeek =
+      form.empId === '007'
+        ? 1
+        : rotationWeek
+
+    const schedule = schedules.find(
+      item =>
+        item.employee_id === form.empId &&
+        item.week_number === targetWeek,
+    )
+
+    // Si ya existe la fila, actualizamos solamente el día seleccionado.
+    if (schedule) {
+      const { error } = await supabase
+        .from('schedules')
+        .update({
+          [column]: value,
+        })
+        .eq('id', schedule.id)
+
+      if (error) {
+        console.error(
+          'Error actualizando horario:',
+          error,
+        )
+        return
+      }
+    } else {
+      // Si no existe, creamos la fila completa.
+      const newSchedule = {
+        employee_id: form.empId,
+        week_number: targetWeek,
+        monday: '—',
+        tuesday: '—',
+        wednesday: '—',
+        thursday: '—',
+        friday: '—',
+        saturday: '—',
+        sunday: '—',
         [column]: value,
-      })
-      .eq('id', schedule.id)
+      }
+
+      const { error } = await supabase
+        .from('schedules')
+        .insert(newSchedule)
+
+      if (error) {
+        console.error(
+          'Error creando horario:',
+          error,
+        )
+        return
+      }
+    }
+
+    // Volvemos a cargar los horarios desde Supabase.
+    const { data, error } = await supabase
+      .from('schedules')
+      .select('*')
 
     if (error) {
-      console.error('Error actualizando horario:', error)
+      console.error(
+        'Error cargando horarios:',
+        error,
+      )
       return
     }
 
-    setSchedules(prev =>
-      prev.map(item =>
-        item.id === schedule.id
-          ? {
-            ...item,
-            [column]: value,
-          }
-          : item,
-      )
-    )
+    setSchedules(data || [])
 
-    setAddModal(false)
+    setForm({
+      empId: '',
+      dayIdx: '0',
+      start: '08:00',
+      end: '16:00',
+      special: '',
+    })
   }
 
 
