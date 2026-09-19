@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { WEEKLY_SCHEDULES, } from '../data'
+import { WEEKLY_SCHEDULES } from '../data'
 import { supabase } from '../SupabaseClient'
-import type { Employee, EmployeeStatus, AttendanceRecord, JornadaStatus } from '../data'
+import type {
+  Employee,
+  EmployeeStatus,
+  AttendanceRecord,
+  JornadaStatus,
+} from '../data'
 
 const GOLD = '#c9a84c'
 
-const JORNADA_CFG: Record<JornadaStatus, { label: string; dot: string; bg: string; text: string }> = {
+const JORNADA_CFG: Record<
+  JornadaStatus,
+  { label: string; dot: string; bg: string; text: string }
+> = {
   EN_TURNO: {
     label: 'EN TURNO',
     dot: '#34d399',
@@ -50,7 +58,11 @@ function JornadaBadge({ status }: { status: JornadaStatus }) {
   )
 }
 
-function EmployeeStatusBadge({ status }: { status: EmployeeStatus }) {
+function EmployeeStatusBadge({
+  status,
+}: {
+  status: EmployeeStatus
+}) {
   const active = status === 'ACTIVO'
 
   return (
@@ -65,7 +77,9 @@ function EmployeeStatusBadge({ status }: { status: EmployeeStatus }) {
     >
       <span
         className="w-1.5 h-1.5 rounded-full"
-        style={{ backgroundColor: active ? '#34d399' : '#f87171' }}
+        style={{
+          backgroundColor: active ? '#34d399' : '#f87171',
+        }}
       />
       {active ? 'ACTIVO' : 'INACTIVO'}
     </span>
@@ -105,7 +119,6 @@ function Avatar({
   )
 }
 
-
 function getTodayDate() {
   const now = new Date()
 
@@ -125,16 +138,26 @@ function getCurrentTime() {
   })
 }
 
-function calculateHours(arrival: string, departure: string) {
+function calculateHours(
+  arrival: string,
+  departure: string,
+) {
   if (!arrival || !departure) return ''
 
-  const [arrivalHour, arrivalMinute] = arrival.split(':').map(Number)
-  const [departureHour, departureMinute] = departure.split(':').map(Number)
+  const [arrivalHour, arrivalMinute] =
+    arrival.split(':').map(Number)
 
-  const arrivalTotal = arrivalHour * 60 + arrivalMinute
-  const departureTotal = departureHour * 60 + departureMinute
+  const [departureHour, departureMinute] =
+    departure.split(':').map(Number)
 
-  let difference = departureTotal - arrivalTotal
+  const arrivalTotal =
+    arrivalHour * 60 + arrivalMinute
+
+  const departureTotal =
+    departureHour * 60 + departureMinute
+
+  let difference =
+    departureTotal - arrivalTotal
 
   if (difference < 0) {
     difference += 24 * 60
@@ -143,7 +166,9 @@ function calculateHours(arrival: string, departure: string) {
   const hours = Math.floor(difference / 60)
   const minutes = difference % 60
 
-  return `${hours}h ${minutes.toString().padStart(2, '0')}min`
+  return `${hours}h ${minutes
+    .toString()
+    .padStart(2, '0')}min`
 }
 
 function Modal({
@@ -158,9 +183,11 @@ function Modal({
     document.body,
   )
 }
-export default function Employees() {
 
-  const getEffectiveSchedule = (employeeId: string) => {
+export default function Employees() {
+  const getEffectiveSchedule = (
+    employeeId: string,
+  ) => {
     const schedule = schedules[employeeId]
 
     if (schedule && schedule.length === 7) {
@@ -198,7 +225,7 @@ export default function Employees() {
     const weeksSinceAnchor = Math.floor(
       (weekStart.getTime() -
         rotationAnchor.getTime()) /
-      (7 * 24 * 60 * 60 * 1000),
+        (7 * 24 * 60 * 60 * 1000),
     )
 
     const rotationIndex =
@@ -209,8 +236,11 @@ export default function Employees() {
     return rotations[rotationIndex]
   }
 
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [employeesLoading, setEmployeesLoading] = useState(true)
+  const [employees, setEmployees] =
+    useState<Employee[]>([])
+
+  const [employeesLoading, setEmployeesLoading] =
+    useState(true)
 
   const [schedules, setSchedules] = useState<
     Record<string, string[]>
@@ -226,7 +256,11 @@ export default function Employees() {
         .order('id')
 
       if (error) {
-        console.error('Error cargando empleados:', error)
+        console.error(
+          'Error cargando empleados:',
+          error,
+        )
+
         setEmployeesLoading(false)
         return
       }
@@ -257,61 +291,64 @@ export default function Employees() {
         string[]
       > = {}
 
-        ; (data || []).forEach(schedule => {
-          const days = [
-            schedule.monday,
-            schedule.tuesday,
-            schedule.wednesday,
-            schedule.thursday,
-            schedule.friday,
-            schedule.saturday,
-            schedule.sunday,
-          ]
+      ;(data || []).forEach(schedule => {
+        const days = [
+          schedule.monday,
+          schedule.tuesday,
+          schedule.wednesday,
+          schedule.thursday,
+          schedule.friday,
+          schedule.saturday,
+          schedule.sunday,
+        ]
 
-          /*
-           * Determinamos cuál es la semana actual
-           * según la rotación que comienza el
-           * 07/09/2026.
-           */
-          const today = new Date()
+        /*
+         * Determinamos cuál es la semana actual
+         * según la rotación que comienza el
+         * 07/09/2026.
+         */
+        const today = new Date()
 
-          const day = today.getDay()
+        const day = today.getDay()
 
-          const diff =
-            today.getDate() -
-            day +
-            (day === 0 ? -6 : 1)
+        const diff =
+          today.getDate() -
+          day +
+          (day === 0 ? -6 : 1)
 
-          const weekStart = new Date(today)
+        const weekStart = new Date(today)
 
-          weekStart.setDate(diff)
-          weekStart.setHours(0, 0, 0, 0)
+        weekStart.setDate(diff)
+        weekStart.setHours(0, 0, 0, 0)
 
-          const rotationAnchor = new Date(
-            2026,
-            8,
-            7,
-          )
+        const rotationAnchor = new Date(
+          2026,
+          8,
+          7,
+        )
 
-          const weeksSinceAnchor = Math.floor(
-            (weekStart.getTime() -
-              rotationAnchor.getTime()) /
+        const weeksSinceAnchor = Math.floor(
+          (weekStart.getTime() -
+            rotationAnchor.getTime()) /
             (7 * 24 * 60 * 60 * 1000),
-          )
+        )
 
-          const weekIndex =
-            ((weeksSinceAnchor % 4) + 4) % 4
+        const weekIndex =
+          ((weeksSinceAnchor % 4) + 4) % 4
 
-          /*
-           * Solo usamos el registro de la semana
-           * que corresponde actualmente.
-           */
-          if (schedule.week_number - 1 === weekIndex) {
-            mappedSchedules[
-              schedule.employee_id
-            ] = days
-          }
-        })
+        /*
+         * Solo usamos el registro de la semana
+         * que corresponde actualmente.
+         */
+        if (
+          schedule.week_number - 1 ===
+          weekIndex
+        ) {
+          mappedSchedules[
+            schedule.employee_id
+          ] = days
+        }
+      })
 
       setSchedules(mappedSchedules)
     }
@@ -364,16 +401,23 @@ export default function Employees() {
     loadAttendance()
   }, [])
 
-
   const [search, setSearch] = useState('')
+
   const [statusFilter, setStatusFilter] =
     useState<JornadaStatus | 'ALL'>('ALL')
 
-  const [profileId, setProfileId] = useState<string | null>(null)
+  const [profileId, setProfileId] =
+    useState<string | null>(null)
 
-  const [arrivalModal, setArrivalModal] = useState(false)
-  const [departureModal, setDepartureModal] = useState(false)
-  const [employeeModal, setEmployeeModal] = useState(false)
+  const [arrivalModal, setArrivalModal] =
+    useState(false)
+
+  const [departureModal, setDepartureModal] =
+    useState(false)
+
+  const [employeeModal, setEmployeeModal] =
+    useState(false)
+
   const [editingEmployee, setEditingEmployee] =
     useState<Employee | null>(null)
 
@@ -386,15 +430,23 @@ export default function Employees() {
   const [departureTime, setDepartureTime] =
     useState(getCurrentTime())
 
-  const [arrivalObs, setArrivalObs] = useState('')
-  const [departureObs, setDepartureObs] = useState('')
+  const [arrivalObs, setArrivalObs] =
+    useState('')
 
-  const [newName, setNewName] = useState('')
-  const [newRole, setNewRole] = useState('')
+  const [departureObs, setDepartureObs] =
+    useState('')
+
+  const [newName, setNewName] =
+    useState('')
+
+  const [newRole, setNewRole] =
+    useState('')
 
   const dateStr = getTodayDate()
 
-  const getTodayAttendance = (employeeId: string) => {
+  const getTodayAttendance = (
+    employeeId: string,
+  ) => {
     return attendance.find(
       record =>
         record.employeeId === employeeId &&
@@ -402,12 +454,93 @@ export default function Employees() {
     )
   }
 
+  /*
+   * Determina si un empleado puede registrar
+   * su llegada.
+   *
+   * La ventana comienza 20 minutos antes
+   * del inicio del turno y termina al finalizar
+   * el turno.
+   */
+  const canRegisterArrival = (
+    employeeId: string,
+  ) => {
+    const schedule =
+      getEffectiveSchedule(employeeId)
+
+    const dayOfWeek = new Date().getDay()
+
+    // lunes = 0 ... domingo = 6
+    const scheduleDay =
+      dayOfWeek === 0 ? 6 : dayOfWeek - 1
+
+    const todaySchedule =
+      schedule?.[scheduleDay]
+
+    if (
+      !todaySchedule ||
+      todaySchedule === 'DESCANSO' ||
+      todaySchedule === '—'
+    ) {
+      return false
+    }
+
+    const [startTime, endTime] =
+      todaySchedule.split('–')
+
+    const [startHour, startMinute] =
+      startTime.trim().split(':').map(Number)
+
+    const [endHour, endMinute] =
+      endTime.trim().split(':').map(Number)
+
+    const now = new Date()
+
+    let currentMinutes =
+      now.getHours() * 60 +
+      now.getMinutes()
+
+    const startMinutes =
+      startHour * 60 +
+      startMinute
+
+    let endMinutes =
+      endHour * 60 +
+      endMinute
+
+    /*
+     * Turnos que atraviesan medianoche.
+     * Ejemplo: 18:00–02:00
+     */
+    if (endMinutes <= startMinutes) {
+      endMinutes += 24 * 60
+
+      if (currentMinutes < startMinutes) {
+        currentMinutes += 24 * 60
+      }
+    }
+
+    /*
+     * Se permite registrar desde 20 minutos
+     * antes del inicio del turno.
+     */
+    const allowedFrom =
+      startMinutes - 20
+
+    return (
+      currentMinutes >= allowedFrom &&
+      currentMinutes < endMinutes
+    )
+  }
+
   const getJornadaStatus = (
     employeeId: string,
   ): JornadaStatus => {
-    const record = getTodayAttendance(employeeId)
+    const record =
+      getTodayAttendance(employeeId)
 
-    const schedule = getEffectiveSchedule(employeeId)
+    const schedule =
+      getEffectiveSchedule(employeeId)
 
     // Día de la semana actual
     const dayOfWeek = new Date().getDay()
@@ -436,19 +569,22 @@ export default function Employees() {
     const now = new Date()
 
     let currentMinutes =
-      now.getHours() * 60 + now.getMinutes()
+      now.getHours() * 60 +
+      now.getMinutes()
 
     const [startHour, startMinute] =
       startTime.trim().split(':').map(Number)
 
     const startMinutes =
-      startHour * 60 + startMinute
+      startHour * 60 +
+      startMinute
 
     const [endHour, endMinute] =
       endTime.trim().split(':').map(Number)
 
     let endMinutes =
-      endHour * 60 + endMinute
+      endHour * 60 +
+      endMinute
 
     /*
      * Turnos que atraviesan medianoche.
@@ -491,9 +627,11 @@ export default function Employees() {
     // El turno terminó y nunca registró llegada
     return 'FUERA_DE_TURNO'
   }
+
   const getHistory = (employeeId: string) => {
     return attendance.filter(
-      record => record.employeeId === employeeId,
+      record =>
+        record.employeeId === employeeId,
     )
   }
 
@@ -524,20 +662,22 @@ export default function Employees() {
     onShift: employees.filter(
       e =>
         e.status === 'ACTIVO' &&
-        getJornadaStatus(e.id) === 'EN_TURNO',
+        getJornadaStatus(e.id) ===
+          'EN_TURNO',
     ).length,
 
     noArrival: employees.filter(
       e =>
         e.status === 'ACTIVO' &&
-        getJornadaStatus(e.id) === 'SIN_LLEGADA',
+        getJornadaStatus(e.id) ===
+          'SIN_LLEGADA',
     ).length,
 
     finished: employees.filter(
       e =>
         e.status === 'ACTIVO' &&
         getJornadaStatus(e.id) ===
-        'JORNADA_FINALIZADA',
+          'JORNADA_FINALIZADA',
     ).length,
   }
 
@@ -545,7 +685,13 @@ export default function Employees() {
     employee?: Employee,
   ) => {
     setSelectedEmp(employee || null)
+
+    /*
+     * Mostramos la hora actual al abrir el modal,
+     * pero esta hora NO será editable.
+     */
     setArrivalTime(getCurrentTime())
+
     setArrivalObs('')
     setArrivalModal(true)
   }
@@ -572,21 +718,43 @@ export default function Employees() {
   }
 
   const handleArrival = async () => {
-    if (!selectedEmp || !arrivalTime) return
+    if (!selectedEmp) return
+
+    /*
+     * Validamos nuevamente al momento exacto
+     * de registrar la llegada.
+     */
+    if (!canRegisterArrival(selectedEmp.id)) {
+      return
+    }
+
+    /*
+     * IMPORTANTE:
+     * La hora que se guarda es la hora real
+     * en la que se presiona "Registrar llegada".
+     *
+     * No usamos la hora que estaba mostrada
+     * anteriormente en el input.
+     */
+    const actualArrivalTime =
+      getCurrentTime()
+
+    setArrivalTime(actualArrivalTime)
 
     const existing =
       getTodayAttendance(selectedEmp.id)
 
     if (existing) {
-      const { data, error } = await supabase
-        .from('attendance')
-        .update({
-          arrival: arrivalTime,
-          notes: arrivalObs,
-        })
-        .eq('id', existing.id)
-        .select()
-        .single()
+      const { data, error } =
+        await supabase
+          .from('attendance')
+          .update({
+            arrival: actualArrivalTime,
+            notes: arrivalObs,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single()
 
       if (error) {
         console.error(
@@ -618,21 +786,23 @@ export default function Employees() {
         id: `A${Date.now()}`,
         employeeId: selectedEmp.id,
         date: dateStr,
-        arrival: arrivalTime,
+        arrival: actualArrivalTime,
         notes: arrivalObs,
       }
 
-      const { data, error } = await supabase
-        .from('attendance')
-        .insert({
-          id: newRecord.id,
-          employee_id: newRecord.employeeId,
-          date: newRecord.date,
-          arrival: newRecord.arrival,
-          notes: newRecord.notes,
-        })
-        .select()
-        .single()
+      const { data, error } =
+        await supabase
+          .from('attendance')
+          .insert({
+            id: newRecord.id,
+            employee_id:
+              newRecord.employeeId,
+            date: newRecord.date,
+            arrival: newRecord.arrival,
+            notes: newRecord.notes,
+          })
+          .select()
+          .single()
 
       if (error) {
         console.error(
@@ -674,16 +844,17 @@ export default function Employees() {
       departureTime,
     )
 
-    const { data, error } = await supabase
-      .from('attendance')
-      .update({
-        departure: departureTime,
-        hours,
-        notes: departureObs,
-      })
-      .eq('id', existing.id)
-      .select()
-      .single()
+    const { data, error } =
+      await supabase
+        .from('attendance')
+        .update({
+          departure: departureTime,
+          hours,
+          notes: departureObs,
+        })
+        .eq('id', existing.id)
+        .select()
+        .single()
 
     if (error) {
       console.error(
@@ -715,13 +886,19 @@ export default function Employees() {
   }
 
   const handleAddEmployee = async () => {
-    if (!newName.trim() || !newRole.trim()) {
+    if (
+      !newName.trim() ||
+      !newRole.trim()
+    ) {
       return
     }
 
     const maxId = employees.reduce(
       (max, employee) =>
-        Math.max(max, Number(employee.id)),
+        Math.max(
+          max,
+          Number(employee.id),
+        ),
       0,
     )
 
@@ -732,14 +909,18 @@ export default function Employees() {
       status: 'ACTIVO',
     }
 
-    const { data, error } = await supabase
-      .from('employees')
-      .insert(newEmployee)
-      .select()
-      .single()
+    const { data, error } =
+      await supabase
+        .from('employees')
+        .insert(newEmployee)
+        .select()
+        .single()
 
     if (error) {
-      console.error('Error agregando empleado:', error)
+      console.error(
+        'Error agregando empleado:',
+        error,
+      )
       return
     }
 
@@ -762,24 +943,29 @@ export default function Employees() {
       return
     }
 
-    const { data, error } = await supabase
-      .from('employees')
-      .update({
-        name: newName.trim(),
-        role: newRole.trim(),
-      })
-      .eq('id', editingEmployee.id)
-      .select()
-      .single()
+    const { data, error } =
+      await supabase
+        .from('employees')
+        .update({
+          name: newName.trim(),
+          role: newRole.trim(),
+        })
+        .eq('id', editingEmployee.id)
+        .select()
+        .single()
 
     if (error) {
-      console.error('Error editando empleado:', error)
+      console.error(
+        'Error editando empleado:',
+        error,
+      )
       return
     }
 
     setEmployees(prev =>
       prev.map(employee =>
-        employee.id === editingEmployee.id
+        employee.id ===
+        editingEmployee.id
           ? (data as Employee)
           : employee,
       ),
@@ -799,14 +985,15 @@ export default function Employees() {
         ? 'INACTIVO'
         : 'ACTIVO'
 
-    const { data, error } = await supabase
-      .from('employees')
-      .update({
-        status: newStatus,
-      })
-      .eq('id', employee.id)
-      .select()
-      .single()
+    const { data, error } =
+      await supabase
+        .from('employees')
+        .update({
+          status: newStatus,
+        })
+        .eq('id', employee.id)
+        .select()
+        .single()
 
     if (error) {
       console.error(
@@ -852,7 +1039,6 @@ export default function Employees() {
 
           return (
             <div className="p-6 space-y-6 max-w-4xl mx-auto">
-
               <button
                 onClick={() =>
                   setProfileId(null)
@@ -874,16 +1060,13 @@ export default function Employees() {
               </button>
 
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-
                   <Avatar
                     name={emp.name}
                     size="lg"
                   />
 
                   <div className="flex-1">
-
                     <h2 className="text-xl font-semibold text-zinc-100">
                       {emp.name}
                     </h2>
@@ -893,7 +1076,6 @@ export default function Employees() {
                     </p>
 
                     <div className="mt-3 flex flex-wrap gap-2">
-
                       <EmployeeStatusBadge
                         status={emp.status}
                       />
@@ -903,11 +1085,9 @@ export default function Employees() {
                           emp.id,
                         )}
                       />
-
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">
-
                       <button
                         onClick={() => {
                           setEditingEmployee(emp)
@@ -926,37 +1106,27 @@ export default function Employees() {
                         }
                         className="px-3 py-2 text-sm rounded-lg border border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
                       >
-                        {emp.status === 'ACTIVO'
+                        {emp.status ===
+                        'ACTIVO'
                           ? 'Desactivar empleado'
                           : 'Activar empleado'}
                       </button>
-
                     </div>
-
                   </div>
-
                 </div>
-
               </div>
 
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-
                 <div className="px-5 py-4 border-b border-zinc-800">
-
                   <h3 className="text-sm font-semibold text-zinc-100">
                     Historial de asistencia
                   </h3>
-
                 </div>
 
                 <div className="overflow-x-auto">
-
                   <table className="w-full">
-
                     <thead>
-
                       <tr className="bg-zinc-950">
-
                         {[
                           'Fecha',
                           'Entrada',
@@ -971,14 +1141,12 @@ export default function Employees() {
                             {header}
                           </th>
                         ))}
-
                       </tr>
-
                     </thead>
 
                     <tbody className="divide-y divide-zinc-800/50">
-
-                      {history.length === 0 ? (
+                      {history.length ===
+                      0 ? (
                         <tr>
                           <td
                             colSpan={5}
@@ -993,7 +1161,6 @@ export default function Employees() {
                             key={record.id}
                             className="hover:bg-zinc-800/20 transition-colors"
                           >
-
                             <td
                               className="px-5 py-3 text-sm text-zinc-400"
                               style={{
@@ -1011,7 +1178,8 @@ export default function Employees() {
                                   'JetBrains Mono, monospace',
                               }}
                             >
-                              {record.arrival || '—'}
+                              {record.arrival ||
+                                '—'}
                             </td>
 
                             <td
@@ -1021,7 +1189,8 @@ export default function Employees() {
                                   'JetBrains Mono, monospace',
                               }}
                             >
-                              {record.departure || '—'}
+                              {record.departure ||
+                                '—'}
                             </td>
 
                             <td
@@ -1031,43 +1200,33 @@ export default function Employees() {
                                   'JetBrains Mono, monospace',
                               }}
                             >
-                              {record.hours || '—'}
+                              {record.hours ||
+                                '—'}
                             </td>
 
                             <td className="px-5 py-3 text-sm text-zinc-600">
-                              {record.notes || '—'}
+                              {record.notes ||
+                                '—'}
                             </td>
-
                           </tr>
                         ))
                       )}
-
                     </tbody>
-
                   </table>
-
                 </div>
-
               </div>
-
             </div>
           )
         })()
       ) : (
-
         // =================================================
         // PÁGINA PRINCIPAL
         // =================================================
 
         <div className="p-6 space-y-6 max-w-7xl mx-auto">
-
-          {/* Aquí va TODO tu contenido actual de la
-              página principal de empleados */}
-
           {/* STATS */}
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
             {[
               {
                 label: 'Activos',
@@ -1110,15 +1269,12 @@ export default function Employees() {
                 </div>
               </div>
             ))}
-
           </div>
 
           {/* FILTROS */}
 
           <div className="flex flex-col sm:flex-row gap-3">
-
             <div className="relative flex-1">
-
               <svg
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600"
                 width="14"
@@ -1128,7 +1284,11 @@ export default function Employees() {
                 stroke="currentColor"
                 strokeWidth="2"
               >
-                <circle cx="11" cy="11" r="8" />
+                <circle
+                  cx="11"
+                  cy="11"
+                  r="8"
+                />
                 <path d="m21 21-4.35-4.35" />
               </svg>
 
@@ -1140,7 +1300,6 @@ export default function Employees() {
                 placeholder="Buscar empleado o cargo..."
                 className="w-full bg-zinc-900 border border-zinc-800 rounded-lg pl-9 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-700 focus:outline-none focus:border-zinc-700 transition-colors"
               />
-
             </div>
 
             <select
@@ -1148,8 +1307,8 @@ export default function Employees() {
               onChange={e =>
                 setStatusFilter(
                   e.target.value as
-                  | JornadaStatus
-                  | 'ALL',
+                    | JornadaStatus
+                    | 'ALL',
                 )
               }
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-400 focus:outline-none cursor-pointer"
@@ -1215,21 +1374,15 @@ export default function Employees() {
             >
               Registrar salida
             </button>
-
           </div>
 
           {/* TABLA */}
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-
             <div className="overflow-x-auto">
-
               <table className="w-full min-w-[850px]">
-
                 <thead>
-
                   <tr className="bg-zinc-950 text-left">
-
                     {[
                       'Empleado',
                       'Cargo',
@@ -1246,15 +1399,11 @@ export default function Employees() {
                         {header}
                       </th>
                     ))}
-
                   </tr>
-
                 </thead>
 
                 <tbody className="divide-y divide-zinc-800/50">
-
                   {filtered.map(employee => {
-
                     const record =
                       getTodayAttendance(
                         employee.id,
@@ -1270,9 +1419,7 @@ export default function Employees() {
                         key={employee.id}
                         className="hover:bg-zinc-800/20 transition-colors group"
                       >
-
                         <td className="px-5 py-3">
-
                           <button
                             onClick={() =>
                               setProfileId(
@@ -1281,17 +1428,16 @@ export default function Employees() {
                             }
                             className="flex items-center gap-3"
                           >
-
                             <Avatar
-                              name={employee.name}
+                              name={
+                                employee.name
+                              }
                             />
 
                             <span className="text-sm font-medium text-zinc-300 group-hover:text-zinc-100 transition-colors">
                               {employee.name}
                             </span>
-
                           </button>
-
                         </td>
 
                         <td className="px-5 py-3 text-sm text-zinc-500">
@@ -1313,7 +1459,8 @@ export default function Employees() {
                               'JetBrains Mono, monospace',
                           }}
                         >
-                          {record?.arrival || '—'}
+                          {record?.arrival ||
+                            '—'}
                         </td>
 
                         <td
@@ -1323,7 +1470,8 @@ export default function Employees() {
                               'JetBrains Mono, monospace',
                           }}
                         >
-                          {record?.departure || '—'}
+                          {record?.departure ||
+                            '—'}
                         </td>
 
                         <td
@@ -1333,17 +1481,18 @@ export default function Employees() {
                               'JetBrains Mono, monospace',
                           }}
                         >
-                          {record?.hours || '—'}
+                          {record?.hours ||
+                            '—'}
                         </td>
 
                         <td className="px-5 py-3">
-
                           <div className="flex gap-2">
-
                             {employee.status ===
                               'ACTIVO' &&
-                              jornadaStatus ===
-                              'SIN_LLEGADA' && (
+                              !record?.arrival &&
+                              canRegisterArrival(
+                                employee.id,
+                              ) && (
                                 <button
                                   onClick={() =>
                                     openArrivalModal(
@@ -1367,7 +1516,7 @@ export default function Employees() {
                             {employee.status ===
                               'ACTIVO' &&
                               jornadaStatus ===
-                              'EN_TURNO' && (
+                                'EN_TURNO' && (
                                 <button
                                   onClick={() =>
                                     openDepartureModal(
@@ -1390,11 +1539,8 @@ export default function Employees() {
                             >
                               Perfil
                             </button>
-
                           </div>
-
                         </td>
-
                       </tr>
                     )
                   })}
@@ -1409,15 +1555,10 @@ export default function Employees() {
                       </td>
                     </tr>
                   )}
-
                 </tbody>
-
               </table>
-
             </div>
-
           </div>
-
         </div>
       )}
 
@@ -1427,11 +1568,8 @@ export default function Employees() {
 
       {employeeModal && (
         <Modal>
-
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl">
-
             <div className="px-6 py-5 border-b border-zinc-800 flex items-center justify-between">
-
               <h3 className="text-base font-semibold text-zinc-100">
                 {editingEmployee
                   ? 'Editar empleado'
@@ -1447,13 +1585,10 @@ export default function Employees() {
               >
                 ✕
               </button>
-
             </div>
 
             <div className="p-6 space-y-4">
-
               <div>
-
                 <label className={labelCls}>
                   Nombre completo
                 </label>
@@ -1466,11 +1601,9 @@ export default function Employees() {
                   placeholder="Ej. Juan Pérez"
                   className={inputCls}
                 />
-
               </div>
 
               <div>
-
                 <label className={labelCls}>
                   Cargo
                 </label>
@@ -1483,13 +1616,10 @@ export default function Employees() {
                   placeholder="Ej. Cajero"
                   className={inputCls}
                 />
-
               </div>
-
             </div>
 
             <div className="px-6 pb-6 flex justify-end gap-3">
-
               <button
                 onClick={() => {
                   setEmployeeModal(false)
@@ -1516,11 +1646,8 @@ export default function Employees() {
                   ? 'Guardar cambios'
                   : 'Agregar empleado'}
               </button>
-
             </div>
-
           </div>
-
         </Modal>
       )}
 
@@ -1530,11 +1657,8 @@ export default function Employees() {
 
       {arrivalModal && (
         <Modal>
-
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl">
-
             <div className="px-6 py-5 border-b border-zinc-800 flex items-center justify-between">
-
               <h3 className="text-base font-semibold text-zinc-100">
                 Registrar llegada
               </h3>
@@ -1545,13 +1669,10 @@ export default function Employees() {
               >
                 ✕
               </button>
-
             </div>
 
             <div className="p-6 space-y-4">
-
               <div>
-
                 <label className={labelCls}>
                   Empleado
                 </label>
@@ -1571,7 +1692,6 @@ export default function Employees() {
                   }
                   className={inputCls}
                 >
-
                   <option value="">
                     Seleccionar empleado...
                   </option>
@@ -1580,11 +1700,13 @@ export default function Employees() {
                     .filter(
                       employee =>
                         employee.status ===
-                        'ACTIVO' &&
-                        getJornadaStatus(
+                          'ACTIVO' &&
+                        !getTodayAttendance(
                           employee.id,
-                        ) ===
-                        'SIN_LLEGADA',
+                        ) &&
+                        canRegisterArrival(
+                          employee.id,
+                        ),
                     )
                     .map(employee => (
                       <option
@@ -1595,15 +1717,11 @@ export default function Employees() {
                         {employee.role}
                       </option>
                     ))}
-
                 </select>
-
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-
                 <div>
-
                   <label className={labelCls}>
                     Fecha
                   </label>
@@ -1613,18 +1731,16 @@ export default function Employees() {
                     readOnly
                     className={
                       inputCls +
-                      ' text-zinc-500'
+                      ' text-zinc-500 cursor-not-allowed'
                     }
                     style={{
                       fontFamily:
                         'JetBrains Mono, monospace',
                     }}
                   />
-
                 </div>
 
                 <div>
-
                   <label className={labelCls}>
                     Hora
                   </label>
@@ -1632,27 +1748,32 @@ export default function Employees() {
                   <input
                     type="time"
                     value={arrivalTime}
-                    onChange={e =>
-                      setArrivalTime(
-                        e.target.value,
-                      )
-                    }
+                    readOnly
                     className={
                       inputCls +
-                      ' text-emerald-400'
+                      ' text-emerald-400 cursor-not-allowed'
                     }
                     style={{
                       fontFamily:
                         'JetBrains Mono, monospace',
                     }}
                   />
-
                 </div>
+              </div>
 
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3">
+                <p className="text-xs text-zinc-500">
+                  La hora de llegada se registra
+                  automáticamente al presionar
+                  <span className="text-zinc-300">
+                    {' '}
+                    "Registrar llegada"
+                  </span>
+                  .
+                </p>
               </div>
 
               <div>
-
                 <label className={labelCls}>
                   Observación (opcional)
                 </label>
@@ -1671,13 +1792,10 @@ export default function Employees() {
                     ' resize-none'
                   }
                 />
-
               </div>
-
             </div>
 
             <div className="px-6 pb-6 flex justify-end gap-3">
-
               <button
                 onClick={closeArrivalModal}
                 className="px-4 py-2 text-sm text-zinc-500 border border-zinc-800 rounded-lg hover:bg-zinc-800"
@@ -1687,7 +1805,12 @@ export default function Employees() {
 
               <button
                 onClick={handleArrival}
-                disabled={!selectedEmp}
+                disabled={
+                  !selectedEmp ||
+                  !canRegisterArrival(
+                    selectedEmp?.id || '',
+                  )
+                }
                 className="px-4 py-2 text-sm font-semibold rounded-lg disabled:opacity-40"
                 style={{
                   backgroundColor: GOLD,
@@ -1696,11 +1819,8 @@ export default function Employees() {
               >
                 Registrar llegada
               </button>
-
             </div>
-
           </div>
-
         </Modal>
       )}
 
@@ -1710,11 +1830,8 @@ export default function Employees() {
 
       {departureModal && (
         <Modal>
-
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl">
-
             <div className="px-6 py-5 border-b border-zinc-800 flex items-center justify-between">
-
               <h3 className="text-base font-semibold text-zinc-100">
                 Registrar salida
               </h3>
@@ -1725,13 +1842,10 @@ export default function Employees() {
               >
                 ✕
               </button>
-
             </div>
 
             <div className="p-6 space-y-4">
-
               <div>
-
                 <label className={labelCls}>
                   Empleado
                 </label>
@@ -1751,7 +1865,6 @@ export default function Employees() {
                   }
                   className={inputCls}
                 >
-
                   <option value="">
                     Seleccionar empleado...
                   </option>
@@ -1760,11 +1873,10 @@ export default function Employees() {
                     .filter(
                       employee =>
                         employee.status ===
-                        'ACTIVO' &&
+                          'ACTIVO' &&
                         getJornadaStatus(
                           employee.id,
-                        ) ===
-                        'EN_TURNO',
+                        ) === 'EN_TURNO',
                     )
                     .map(employee => (
                       <option
@@ -1775,16 +1887,12 @@ export default function Employees() {
                         {employee.role}
                       </option>
                     ))}
-
                 </select>
-
               </div>
 
               {selectedEmp && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-3">
-
                   <div className="flex justify-between text-sm">
-
                     <span className="text-zinc-600">
                       Entrada registrada:
                     </span>
@@ -1802,16 +1910,12 @@ export default function Employees() {
                         )?.arrival
                       }
                     </span>
-
                   </div>
-
                 </div>
               )}
 
               <div className="grid grid-cols-2 gap-3">
-
                 <div>
-
                   <label className={labelCls}>
                     Fecha
                   </label>
@@ -1828,11 +1932,9 @@ export default function Employees() {
                         'JetBrains Mono, monospace',
                     }}
                   />
-
                 </div>
 
                 <div>
-
                   <label className={labelCls}>
                     Hora
                   </label>
@@ -1854,13 +1956,10 @@ export default function Employees() {
                         'JetBrains Mono, monospace',
                     }}
                   />
-
                 </div>
-
               </div>
 
               <div>
-
                 <label className={labelCls}>
                   Observación (opcional)
                 </label>
@@ -1879,13 +1978,10 @@ export default function Employees() {
                     ' resize-none'
                   }
                 />
-
               </div>
-
             </div>
 
             <div className="px-6 pb-6 flex justify-end gap-3">
-
               <button
                 onClick={closeDepartureModal}
                 className="px-4 py-2 text-sm text-zinc-500 border border-zinc-800 rounded-lg hover:bg-zinc-800"
@@ -1904,14 +2000,10 @@ export default function Employees() {
               >
                 Registrar salida
               </button>
-
             </div>
-
           </div>
-
         </Modal>
       )}
-
     </>
   )
 }
