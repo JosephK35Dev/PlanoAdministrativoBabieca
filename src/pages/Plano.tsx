@@ -245,6 +245,7 @@ export default function Plano() {
   const [loading, setLoading] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const isEditorUpdate = useRef(false)
 
   /*
    * CARGAR DOCUMENTOS DESDE SUPABASE
@@ -411,6 +412,15 @@ export default function Plano() {
       const content = editor.getHTML()
       const updatedAt = new Date().toISOString()
 
+      /*
+       * Marcamos que este cambio viene directamente
+       * de la escritura del usuario.
+       *
+       * Así evitamos que el efecto de cambio de documento
+       * vuelva a ejecutar setContent() y mueva el cursor.
+       */
+      isEditorUpdate.current = true
+
       setDocuments(current =>
         current.map(document =>
           document.id === selectedId
@@ -438,6 +448,18 @@ export default function Plano() {
   useEffect(() => {
     if (!editor || !selectedDocument) return
 
+    /*
+     * Si el cambio vino de la escritura del usuario,
+     * NO volvemos a cargar el contenido.
+     *
+     * Esto evita que el cursor salte al final
+     * después de cada carácter.
+     */
+    if (isEditorUpdate.current) {
+      isEditorUpdate.current = false
+      return
+    }
+
     editor.commands.setContent(
       selectedDocument.content,
       {
@@ -454,7 +476,7 @@ export default function Plano() {
   /*
    * AUTOSAVE EN SUPABASE
    *
-   * Se espera 500 ms después del último cambio
+   * Se espera 1500 ms después del último cambio
    * antes de guardar.
    */
   useEffect(() => {
@@ -493,7 +515,7 @@ export default function Plano() {
       }
 
       setSaved(true)
-    }, 500)
+    }, 1500)
 
     return () => {
       window.clearTimeout(timeout)
