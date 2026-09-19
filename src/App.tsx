@@ -7,6 +7,7 @@ import RegistrationBonuses from './pages/RegistrationBonuses'
 import Withdrawals from './pages/Withdrawals'
 import Plano from './pages/Plano'
 import Accounting from './pages/Accounting'
+import Rollover from './pages/Rollover'
 import { supabase } from './SupabaseClient'
 import type { Page } from './data'
 
@@ -23,6 +24,7 @@ const NAV_ITEMS: { id: Page; icon: string; label: string; url?: string }[] = [
   { id: 'withdrawals', icon: '💰', label: 'Retiros' },
   { id: 'accounting', icon: '🧮', label: 'Contabilidad' },
   { id: 'filter', icon: '📈', label: 'Filtro Pasarela Pago', url: 'https://josephk35dev.github.io/Filtro-Pasarela-Pagos/' },
+  { id: 'rollover', icon: '🔄', label: 'Rollover' },  
   { id: 'plano', icon: '📋', label: 'Plano' },
 ]
 
@@ -33,7 +35,8 @@ const PAGE_TITLES: Record<Page, string> = {
   bonuses: 'Bonos',
   registrationBonuses: 'Bonos por registro',
   accounting: 'Contabilidad/Cuadres',
-  filter: 'Filtro Pasarela Pago',
+  filter: 'Filtro Pasarela Pago', 
+  rollover: 'Rollover',
   withdrawals: 'Retiros',
   plano: 'Plano',
 }
@@ -96,6 +99,7 @@ export default function App() {
       case 'withdrawals': return <Withdrawals />
       case 'accounting': return <Accounting />
       case 'plano': return <Plano />
+      case 'rollover': return <Rollover />
     }
   }
 
