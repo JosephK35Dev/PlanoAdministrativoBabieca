@@ -11,11 +11,13 @@ import Rollover from './pages/Rollover'
 import { supabase } from './SupabaseClient'
 import type { Page } from './data'
 
+type AppPage = Page | 'rollover'
+
 const GOLD = '#c9a84c'
 const ACCESS_PASSWORD = 'babieca2026'
 const ACCESS_STORAGE_KEY = 'babieca_access_authorized'
 
-const NAV_ITEMS: { id: Page; icon: string; label: string; url?: string }[] = [
+const NAV_ITEMS: { id: AppPage; icon: string; label: string; url?: string }[] = [
   { id: 'dashboard', icon: '🏠', label: 'Inicio' },
   { id: 'employees', icon: '👥', label: 'Empleados' },
   { id: 'schedules', icon: '🕐', label: 'Horarios' },
@@ -28,7 +30,7 @@ const NAV_ITEMS: { id: Page; icon: string; label: string; url?: string }[] = [
   { id: 'plano', icon: '📋', label: 'Plano' },
 ]
 
-const PAGE_TITLES: Record<Page, string> = {
+const PAGE_TITLES: Record<AppPage, string> = {
   dashboard: 'Inicio',
   employees: 'Empleados',
   schedules: 'Horarios',
@@ -42,7 +44,7 @@ const PAGE_TITLES: Record<Page, string> = {
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard')
+  const [currentPage, setCurrentPage] = useState<AppPage>('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [authorized, setAuthorized] = useState(() => {
