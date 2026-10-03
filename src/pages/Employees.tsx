@@ -202,7 +202,7 @@ export default function Employees() {
         '22:00–08:00',
       ]
     }
-    
+
     const schedule = schedules[employeeId]
 
     if (schedule && schedule.length === 7) {
@@ -524,6 +524,10 @@ export default function Employees() {
     const [startTime, endTime] =
       todaySchedule.split('–')
 
+    if (!startTime || !endTime) {
+      return false
+    }
+
     const [startHour, startMinute] =
       startTime.trim().split(':').map(Number)
 
@@ -601,6 +605,10 @@ export default function Employees() {
     // Extraemos hora de entrada y salida
     const [startTime, endTime] =
       todaySchedule.split('–')
+
+    if (!startTime || !endTime) {
+      return 'FUERA_DE_TURNO'
+    }
 
     const now = new Date()
 
