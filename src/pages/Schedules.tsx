@@ -56,6 +56,7 @@ export default function Schedules() {
         supabase
           .from('employees')
           .select('*')
+          .eq('status', 'ACTIVO')
           .order('id'),
 
         supabase

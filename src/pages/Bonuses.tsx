@@ -139,6 +139,26 @@ const BONUS_CONFIG: Record<number, { name: string; steps: BonusStep[] }> = {
   },
 }
 
+const ALL_BONUS_OPTIONS = (() => {
+  const uniqueOptions = new Map<string, BonusOption>()
+
+  Object.values(BONUS_CONFIG).forEach(config => {
+    config.steps.forEach(step => {
+      step.options.forEach(option => {
+        const key = [
+          option.kind,
+          option.label,
+          option.percentage ?? '',
+          option.rollover ?? '',
+        ].join('|')
+        if (!uniqueOptions.has(key)) uniqueOptions.set(key, option)
+      })
+    })
+  })
+
+  return Array.from(uniqueOptions.values())
+})()
+
 function getTodayKey() {
   const now = new Date()
 
@@ -176,6 +196,7 @@ export default function Bonuses() {
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedOption, setSelectedOption] =
     useState<BonusOption | null>(null)
+  const [showAllBonusOptions, setShowAllBonusOptions] = useState(false)
 
   const [rechargeAmount, setRechargeAmount] = useState('')
 
@@ -258,6 +279,7 @@ export default function Bonuses() {
 
     setSelectedOption(null)
     setRechargeAmount('')
+    setShowAllBonusOptions(false)
     setModalOpen(true)
   }
 
@@ -269,7 +291,8 @@ export default function Bonuses() {
 
     if (
       selectedOption.kind === 'PORCENTAJE' ||
-      selectedOption.kind === 'HIPISMO'
+      selectedOption.kind === 'HIPISMO' ||
+      selectedOption.kind === 'DEPORTIVA'
     ) {
       if (!rechargeAmount) return
     }
@@ -278,7 +301,8 @@ export default function Bonuses() {
 
     if (
       (selectedOption.kind === 'PORCENTAJE' ||
-        selectedOption.kind === 'HIPISMO') &&
+        selectedOption.kind === 'HIPISMO' ||
+        selectedOption.kind === 'DEPORTIVA') &&
       (!amount || amount <= 0)
     ) {
       return
@@ -287,7 +311,9 @@ export default function Bonuses() {
     const percentage = selectedOption.percentage || 0
 
     const bonusAmount =
-      selectedOption.percentage === 80
+      selectedOption.kind === 'DEPORTIVA'
+        ? undefined
+        : selectedOption.percentage === 80
         ? undefined
         : percentage > 0
           ? amount * (percentage / 100)
@@ -301,7 +327,8 @@ export default function Bonuses() {
       kind: selectedOption.kind,
       rechargeAmount:
         selectedOption.kind === 'PORCENTAJE' ||
-          selectedOption.kind === 'HIPISMO'
+          selectedOption.kind === 'HIPISMO' ||
+          selectedOption.kind === 'DEPORTIVA'
           ? amount
           : undefined,
       percentage: selectedOption.percentage,
@@ -558,16 +585,37 @@ export default function Bonuses() {
                   Opciones disponibles
                 </p>
 
+                <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={showAllBonusOptions}
+                    onChange={e => {
+                      setShowAllBonusOptions(e.target.checked)
+                      setSelectedOption(null)
+                      setRechargeAmount('')
+                    }}
+                    className="h-4 w-4 accent-amber-400"
+                  />
+                  Todos los bonos
+                </label>
+
+                {showAllBonusOptions && (
+                  <p className="mb-3 text-xs text-zinc-500">
+                    Se muestran todos los tipos definidos en el sistema, sin repetir.
+                  </p>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {todayConfig.steps[
-                    currentStep
-                  ]?.options.map(option => {
+                  {(showAllBonusOptions
+                    ? ALL_BONUS_OPTIONS
+                    : (todayConfig.steps[currentStep]?.options ?? [])
+                  ).map(option => {
                     const selected =
                       selectedOption === option
 
                     return (
                       <button
-                        key={option.label}
+                        key={`${option.kind}-${option.label}-${option.rollover ?? ''}`}
                         onClick={() =>
                           setSelectedOption(option)
                         }
@@ -606,10 +654,11 @@ export default function Bonuses() {
               {/* MONTO */}
               {selectedOption &&
                 (selectedOption.kind === 'PORCENTAJE' ||
-                  selectedOption.kind === 'HIPISMO') && (
+                  selectedOption.kind === 'HIPISMO' ||
+                  selectedOption.kind === 'DEPORTIVA') && (
                   <div>
                     <label className="block text-sm text-zinc-400 mb-2">
-                      Valor de la recarga
+                      {selectedOption.kind === 'DEPORTIVA' ? 'Monto recargado' : 'Valor de la recarga'}
                     </label>
 
                     <input
@@ -625,7 +674,8 @@ export default function Bonuses() {
                       className="w-full h-11 rounded-lg bg-zinc-900 border border-zinc-800 px-4 text-sm text-white outline-none focus:border-zinc-600"
                     />
 
-                    {selectedOption.percentage &&
+                    {selectedOption.kind !== 'DEPORTIVA' &&
+                      selectedOption.percentage &&
                       rechargeAmount &&
                       Number(rechargeAmount) > 0 && (
                         <div className="mt-3 p-4 rounded-lg bg-zinc-900 border border-zinc-800">
@@ -682,7 +732,8 @@ export default function Bonuses() {
                   !selectedOption ||
                   (
                     (selectedOption.kind === 'PORCENTAJE' ||
-                      selectedOption.kind === 'HIPISMO') &&
+                      selectedOption.kind === 'HIPISMO' ||
+                      selectedOption.kind === 'DEPORTIVA') &&
                     (!rechargeAmount ||
                       Number(rechargeAmount) <= 0))
                 }
