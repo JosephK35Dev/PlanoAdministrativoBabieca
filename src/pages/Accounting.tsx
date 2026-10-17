@@ -64,7 +64,9 @@ type ReconciliationMovement = {
     status: 'pending' | 'confirmed' | 'problem'
     movementType: 'entry' | 'exit'
     movementDatetime: string | null
+    reconciliationDate?: string
     platformUser: string
+    proofImage?: string | null
     platformMethod: string
     platformReference: string
     concept: string
@@ -422,8 +424,14 @@ function Reconciliation({
         countryId: string,
     ) => void
 }) {
+    const [reconciliationView, setReconciliationView] = useState<'day' | 'range'>('day')
     const [reconciliationDate, setReconciliationDate] =
         useState(getTodayKey())
+    const [rangeStart, setRangeStart] = useState(getTodayKey())
+    const [rangeEnd, setRangeEnd] = useState(getTodayKey())
+    const [rangeMovements, setRangeMovements] = useState<ReconciliationMovement[]>([])
+    const [loadingRange, setLoadingRange] = useState(false)
+    const [rangeError, setRangeError] = useState('')
 
     const [day, setDay] =
         useState<ReconciliationDay | null>(
@@ -447,6 +455,7 @@ function Reconciliation({
 
     const reconciliationLoadId =
         useRef(0)
+    const rangeLoadId = useRef(0)
 
     const [importModalOpen, setImportModalOpen] =
         useState(false)
@@ -468,17 +477,50 @@ function Reconciliation({
 
     const [savingManual, setSavingManual] =
         useState(false)
+    const [manualSaveError, setManualSaveError] = useState('')
 
     const [manualType, setManualType] =
         useState<'entry' | 'exit'>(
             'entry',
         )
 
-    const [manualConcept, setManualConcept] =
-        useState('')
+    const [manualUser, setManualUser] = useState('')
+    const [manualProofImage, setManualProofImage] = useState<string | null>(null)
+    const [proofImagePreview, setProofImagePreview] = useState<string | null>(null)
 
-    const [manualDescription, setManualDescription] =
-        useState('')
+    const handleProofImageFile = (file?: File | null) => {
+        if (!file) return
+        if (!file.type.startsWith('image/')) {
+            window.alert('Selecciona o pega un archivo de imagen.')
+            return
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            window.alert('La imagen debe pesar máximo 2 MB.')
+            return
+        }
+
+        const reader = new FileReader()
+        reader.onload = () => setManualProofImage(String(reader.result))
+        reader.onerror = () => window.alert('No se pudo leer la imagen.')
+        reader.readAsDataURL(file)
+    }
+
+    useEffect(() => {
+        if (!manualModalOpen) return
+
+        const handlePaste = (event: ClipboardEvent) => {
+            const items = Array.from(event.clipboardData?.items ?? [])
+            const imageItem = items.find(item => item.type.startsWith('image/'))
+            const imageFile = imageItem?.getAsFile()
+            if (!imageFile) return
+
+            event.preventDefault()
+            handleProofImageFile(imageFile)
+        }
+
+        window.addEventListener('paste', handlePaste)
+        return () => window.removeEventListener('paste', handlePaste)
+    }, [manualModalOpen])
 
     const [manualAmount, setManualAmount] =
         useState('')
@@ -493,9 +535,6 @@ function Reconciliation({
         useState<
             'pending' | 'confirmed'
         >('confirmed')
-
-    const [manualObservations, setManualObservations] =
-        useState('')
 
     const [sourceFilter, setSourceFilter] =
         useState<'all' | 'platform' | 'manual'>(
@@ -718,6 +757,7 @@ function Reconciliation({
                             platformUser:
                                 movement.platform_user ??
                                 '',
+                            proofImage: movement.proof_image ?? null,
 
                             platformMethod:
                                 movement.platform_method ??
@@ -842,6 +882,76 @@ function Reconciliation({
         selectedCountryId,
         reconciliationDate,
     ])
+
+    useEffect(() => {
+        if (reconciliationView !== 'range' || !selectedCountryId || !rangeStart || !rangeEnd) return
+
+        const loadId = ++rangeLoadId.current
+        const loadRange = async () => {
+            setLoadingRange(true)
+            setRangeError('')
+            setRangeMovements([])
+
+            if (rangeStart > rangeEnd) {
+                setRangeError('La fecha inicial debe ser anterior o igual a la fecha final.')
+                setLoadingRange(false)
+                return
+            }
+
+            try {
+                const { data: days, error: daysError } = await supabase
+                    .from('reconciliation_days')
+                    .select('id, date')
+                    .eq('country_id', selectedCountryId)
+                    .gte('date', rangeStart)
+                    .lte('date', rangeEnd)
+                    .order('date', { ascending: true })
+
+                if (loadId !== rangeLoadId.current) return
+                if (daysError) throw daysError
+
+                if (!days?.length) return
+
+                const dateByDayId = new Map<string, string>(days.map(item => [item.id, item.date]))
+                const { data: movements, error: movementsError } = await supabase
+                    .from('reconciliation_movements')
+                    .select('*')
+                    .in('reconciliation_day_id', days.map(item => item.id))
+                    .order('movement_datetime', { ascending: true })
+                    .order('created_at', { ascending: true })
+
+                if (loadId !== rangeLoadId.current) return
+                if (movementsError) throw movementsError
+
+                setRangeMovements((movements ?? []).map(movement => ({
+                    id: movement.id,
+                    reconciliationDayId: movement.reconciliation_day_id,
+                    reconciliationDate: dateByDayId.get(movement.reconciliation_day_id) ?? '',
+                    countryId: movement.country_id,
+                    source: movement.source,
+                    status: movement.status,
+                    movementType: movement.movement_type,
+                    movementDatetime: movement.movement_datetime,
+                    platformUser: movement.platform_user ?? '',
+                    proofImage: movement.proof_image ?? null,
+                    platformMethod: movement.platform_method ?? '',
+                    platformReference: movement.platform_reference ?? '',
+                    concept: movement.concept ?? '',
+                    amount: Number(movement.amount ?? 0),
+                    description: movement.description ?? '',
+                    observations: movement.observations ?? '',
+                })))
+            } catch (error) {
+                if (loadId !== rangeLoadId.current) return
+                console.error('Error cargando movimientos del período:', error)
+                setRangeError('No se pudieron cargar los movimientos del período.')
+            } finally {
+                if (loadId === rangeLoadId.current) setLoadingRange(false)
+            }
+        }
+
+        loadRange()
+    }, [reconciliationView, selectedCountryId, rangeStart, rangeEnd])
 
     /*
      * =========================================================
@@ -1491,6 +1601,38 @@ function Reconciliation({
             bankClosingInput,
         ])
 
+    const rangeSummary = useMemo(() => {
+        const entries = rangeMovements
+            .filter(movement => movement.status === 'confirmed' && movement.movementType === 'entry')
+            .reduce((total, movement) => total + movement.amount, 0)
+        const exits = rangeMovements
+            .filter(movement => movement.status === 'confirmed' && movement.movementType === 'exit')
+            .reduce((total, movement) => total + movement.amount, 0)
+        const pending = rangeMovements
+            .filter(movement => movement.status === 'pending')
+            .reduce((total, movement) => total + movement.amount, 0)
+
+        return { entries, exits, net: entries - exits, pending }
+    }, [rangeMovements])
+
+    const rangeDailySummaries = useMemo(() => {
+        const totalsByDate = new Map<string, { entries: number; exits: number }>()
+        rangeMovements.forEach(movement => {
+            const date = movement.reconciliationDate ?? ''
+            if (!date) return
+            const totals = totalsByDate.get(date) ?? { entries: 0, exits: 0 }
+            if (movement.status === 'confirmed' && movement.movementType === 'entry') totals.entries += movement.amount
+            if (movement.status === 'confirmed' && movement.movementType === 'exit') totals.exits += movement.amount
+            totalsByDate.set(date, totals)
+        })
+
+        return Array.from(totalsByDate, ([date, totals]) => ({
+            date,
+            ...totals,
+            net: totals.entries - totals.exits,
+        })).sort((a, b) => a.date.localeCompare(b.date))
+    }, [rangeMovements])
+
     /*
      * =========================================================
      * FILTROS
@@ -1499,7 +1641,11 @@ function Reconciliation({
 
     const filteredReconciliationMovements =
         useMemo(() => {
-            return reconciliationMovements.filter(
+            const movementsToShow = reconciliationView === 'range'
+                ? rangeMovements
+                : reconciliationMovements
+
+            return movementsToShow.filter(
                 movement => {
                     const sourceMatches =
                         sourceFilter ===
@@ -1521,6 +1667,8 @@ function Reconciliation({
             )
         }, [
             reconciliationMovements,
+            rangeMovements,
+            reconciliationView,
             sourceFilter,
             statusFilter,
         ])
@@ -2360,8 +2508,9 @@ function Reconciliation({
             setManualType(
                 'entry',
             )
-            setManualConcept('')
-            setManualDescription('')
+            setManualUser('')
+            setManualProofImage(null)
+            setManualSaveError('')
             setManualAmount('')
             setManualDateTime(
                 local,
@@ -2370,7 +2519,6 @@ function Reconciliation({
             setManualStatus(
                 'confirmed',
             )
-            setManualObservations('')
             setManualModalOpen(true)
         }
 
@@ -2378,7 +2526,7 @@ function Reconciliation({
         async () => {
             if (
                 !selectedCountryId ||
-                !manualConcept.trim()
+                !manualUser.trim()
             ) {
                 return
             }
@@ -2430,28 +2578,17 @@ function Reconciliation({
                                 ).toISOString()
                                 : null,
                         platform_user:
-                            null,
+                            manualUser.trim(),
                         platform_method:
                             null,
                         platform_reference:
                             manualReference.trim() ||
                             null,
-                        concept:
-                            manualConcept
-                                .trim()
-                                .replace(
-                                    /\s+/g,
-                                    ' ',
-                                ),
+                        concept: manualType === 'entry' ? 'Entrada' : 'Salida',
                         amount,
-                        description:
-                            manualDescription
-                                .trim() ||
-                            null,
-                        observations:
-                            manualObservations
-                                .trim() ||
-                            null,
+                        description: null,
+                        observations: null,
+                        proof_image: manualProofImage,
                     })
                     .select()
                     .single()
@@ -2461,6 +2598,7 @@ function Reconciliation({
                     'Error guardando movimiento manual:',
                     error,
                 )
+                setManualSaveError(error.message)
                 setSavingManual(false)
                 return
             }
@@ -2483,6 +2621,7 @@ function Reconciliation({
                 platformUser:
                     data.platform_user ??
                     '',
+                proofImage: data.proof_image ?? null,
                 platformMethod:
                     data.platform_method ??
                     '',
@@ -2546,15 +2685,15 @@ function Reconciliation({
 
                 <div>
                     <h2 className="text-xl font-semibold text-white">
-                        Conciliación diaria
+                        Conciliación
                     </h2>
 
                     <p className="text-sm text-zinc-600 mt-1">
-                        Verifica que los movimientos de la plataforma coincidan con el dinero real del banco.
+                        {reconciliationView === 'day' ? 'Verifica los movimientos y el cierre de un día.' : 'Consulta movimientos y totales del período seleccionado.'}
                     </p>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
+                {reconciliationView === 'day' && <div className="flex flex-wrap gap-2">
 
                     <button
                         onClick={() =>
@@ -2582,7 +2721,7 @@ function Reconciliation({
                         + Añadir movimiento
                     </button>
 
-                </div>
+                </div>}
             </div>
 
             {/* ================================================= */}
@@ -2629,27 +2768,33 @@ function Reconciliation({
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
 
                     <label className="block text-xs text-zinc-500 mb-2">
-                        Día a conciliar
+                        {reconciliationView === 'day' ? 'Día a conciliar' : 'Rango de días'}
                     </label>
 
-                    <input
-                        type="date"
-                        value={
-                            reconciliationDate
-                        }
-                        onChange={e =>
-                            setReconciliationDate(
-                                e.target.value,
-                            )
-                        }
-                        className="w-full h-11 rounded-lg bg-zinc-950 border border-zinc-800 px-4 text-sm text-white outline-none"
-                    />
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                        <div className="flex rounded-lg border border-zinc-800 p-1">
+                            {(['day', 'range'] as const).map(mode => (
+                                <button key={mode} type="button" onClick={() => setReconciliationView(mode)} className="rounded-md px-3 py-1.5 text-xs" style={{ backgroundColor: reconciliationView === mode ? 'rgba(201,168,76,0.12)' : 'transparent', color: reconciliationView === mode ? GOLD : '#a1a1aa' }}>
+                                    {mode === 'day' ? 'Un día' : 'Rango'}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {reconciliationView === 'day' ? (
+                        <input type="date" value={reconciliationDate} onChange={e => setReconciliationDate(e.target.value)} className="w-full h-11 rounded-lg bg-zinc-950 border border-zinc-800 px-4 text-sm text-white outline-none" />
+                    ) : (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div><label className="mb-1 block text-[11px] text-zinc-600">Desde</label><input type="date" value={rangeStart} max={rangeEnd} onChange={e => setRangeStart(e.target.value)} className="w-full h-11 rounded-lg bg-zinc-950 border border-zinc-800 px-3 text-sm text-white outline-none" /></div>
+                            <div><label className="mb-1 block text-[11px] text-zinc-600">Hasta</label><input type="date" value={rangeEnd} min={rangeStart} onChange={e => setRangeEnd(e.target.value)} className="w-full h-11 rounded-lg bg-zinc-950 border border-zinc-800 px-3 text-sm text-white outline-none" /></div>
+                        </div>
+                    )}
 
                 </div>
 
             </div>
 
-            {loadingReconciliation ? (
+            {(reconciliationView === 'day' ? loadingReconciliation : loadingRange) ? (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-12 text-center">
                     <p className="text-sm text-zinc-600">
                         Cargando conciliación...
@@ -2657,6 +2802,7 @@ function Reconciliation({
                 </div>
             ) : selectedCountry ? (
                 <>
+                    {reconciliationView === 'day' && <>
                     {/* ================================================= */}
                     {/* SALDOS */}
                     {/* ================================================= */}
@@ -2950,6 +3096,31 @@ function Reconciliation({
 
                     </div>
 
+                    </>}
+
+                    {reconciliationView === 'range' && (
+                        <>
+                            {rangeError && <div role="alert" className="rounded-xl border border-red-900/60 bg-red-950/30 p-4 text-sm text-red-300">{rangeError}</div>}
+                            {!rangeError && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5"><div className="text-xs text-zinc-500">Entradas confirmadas</div><div className="mt-2 text-xl font-bold text-emerald-400">{formatMoney(rangeSummary.entries, selectedCountry.currency, selectedCountry.symbol)}</div></div>
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5"><div className="text-xs text-zinc-500">Salidas confirmadas</div><div className="mt-2 text-xl font-bold text-red-400">{formatMoney(rangeSummary.exits, selectedCountry.currency, selectedCountry.symbol)}</div></div>
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5"><div className="text-xs text-zinc-500">Neto confirmado</div><div className="mt-2 text-xl font-bold" style={{ color: rangeSummary.net >= 0 ? '#34d399' : '#f87171' }}>{formatMoney(rangeSummary.net, selectedCountry.currency, selectedCountry.symbol)}</div></div>
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5"><div className="text-xs text-zinc-500">Valor pendiente</div><div className="mt-2 text-xl font-bold text-amber-300">{formatMoney(rangeSummary.pending, selectedCountry.currency, selectedCountry.symbol)}</div></div>
+                            </div>}
+                            {!rangeError && rangeDailySummaries.length > 0 && <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+                                <h3 className="text-sm font-semibold text-zinc-100">Totales confirmados por día</h3>
+                                <div className="mt-4 divide-y divide-zinc-800">
+                                    {rangeDailySummaries.map(summary => <div key={summary.date} className="grid grid-cols-2 gap-3 py-3 text-xs sm:grid-cols-4">
+                                        <div className="font-medium text-zinc-200">{formatDate(summary.date)}</div>
+                                        <div className="text-emerald-400">Entradas: {formatMoney(summary.entries, selectedCountry.currency, selectedCountry.symbol)}</div>
+                                        <div className="text-red-400">Salidas: {formatMoney(summary.exits, selectedCountry.currency, selectedCountry.symbol)}</div>
+                                        <div className={summary.net >= 0 ? 'text-emerald-300' : 'text-red-300'}>Neto: {formatMoney(summary.net, selectedCountry.currency, selectedCountry.symbol)}</div>
+                                    </div>)}
+                                </div>
+                            </div>}
+                        </>
+                    )}
+
                     {/* ================================================= */}
                     {/* FILTROS MOVIMIENTOS */}
                     {/* ================================================= */}
@@ -2960,11 +3131,11 @@ function Reconciliation({
 
                             <div>
                                 <h3 className="text-sm font-semibold text-zinc-100">
-                                    Movimientos del día
+                                    {reconciliationView === 'day' ? 'Movimientos del día' : 'Movimientos del período'}
                                 </h3>
 
                                 <p className="text-xs text-zinc-600 mt-1">
-                                    Confirma cada movimiento después de verificarlo en el banco.
+                                    {reconciliationView === 'day' ? 'Confirma cada movimiento después de verificarlo en el banco.' : 'El rango incluye las fechas seleccionadas, desde y hasta.'}
                                 </p>
                             </div>
 
@@ -3093,19 +3264,11 @@ function Reconciliation({
                                             </th>
 
                                             <th className="px-4 py-3 text-xs font-medium text-zinc-500">
-                                                Hora
+                                                Fecha y hora
                                             </th>
 
                                             <th className="px-4 py-3 text-xs font-medium text-zinc-500">
                                                 Tipo
-                                            </th>
-
-                                            <th className="px-4 py-3 text-xs font-medium text-zinc-500">
-                                                Fuente
-                                            </th>
-
-                                            <th className="px-4 py-3 text-xs font-medium text-zinc-500">
-                                                Concepto
                                             </th>
 
                                             <th className="px-4 py-3 text-xs font-medium text-zinc-500">
@@ -3118,6 +3281,10 @@ function Reconciliation({
 
                                             <th className="px-4 py-3 text-xs font-medium text-zinc-500 text-right">
                                                 Valor
+                                            </th>
+
+                                            <th className="px-4 py-3 text-xs font-medium text-zinc-500">
+                                                Comprobante
                                             </th>
 
                                             <th className="px-4 py-3 text-xs font-medium text-zinc-500">
@@ -3151,6 +3318,7 @@ function Reconciliation({
                                                         <td className="px-4 py-4">
 
                                                             <button
+                                                                disabled={reconciliationView === 'range'}
                                                                 onClick={() =>
                                                                     toggleMovementStatus(
                                                                         movement,
@@ -3210,14 +3378,17 @@ function Reconciliation({
                                                             {movement.movementDatetime
                                                                 ? new Date(
                                                                     movement.movementDatetime,
-                                                                ).toLocaleTimeString(
+                                                                ).toLocaleString(
                                                                     'es-CO',
                                                                     {
+                                                                        day: '2-digit',
+                                                                        month: '2-digit',
+                                                                        year: 'numeric',
                                                                         hour: '2-digit',
                                                                         minute: '2-digit',
                                                                     },
                                                                 )
-                                                                : '—'}
+                                                                : movement.reconciliationDate ? formatDate(movement.reconciliationDate) : '—'}
                                                         </td>
 
                                                         <td className="px-4 py-4">
@@ -3243,57 +3414,6 @@ function Reconciliation({
                                                                     : 'Salida'}
                                                             </span>
 
-                                                        </td>
-
-                                                        <td className="px-4 py-4">
-
-                                                            <span
-                                                                className="px-2 py-1 rounded-md text-xs"
-                                                                style={{
-                                                                    backgroundColor:
-                                                                        movement.source ===
-                                                                            'platform'
-                                                                            ? 'rgba(201,168,76,0.08)'
-                                                                            : 'rgba(96,165,250,0.08)',
-                                                                    color:
-                                                                        movement.source ===
-                                                                            'platform'
-                                                                            ? GOLD
-                                                                            : '#60a5fa',
-                                                                }}
-                                                            >
-                                                                {movement.source ===
-                                                                    'platform'
-                                                                    ? 'Plataforma'
-                                                                    : 'Manual'}
-                                                            </span>
-
-                                                        </td>
-
-                                                        <td className="px-4 py-4 text-white font-medium min-w-[180px]">
-                                                            <div>
-                                                                {
-                                                                    movement.concept
-                                                                }
-                                                            </div>
-
-                                                            {movement.description && (
-                                                                <div className="text-xs text-zinc-600 mt-1">
-                                                                    {
-                                                                        movement.description
-                                                                    }
-                                                                </div>
-                                                            )}
-
-                                                            {movement.platformMethod &&
-                                                                movement.platformMethod !==
-                                                                movement.concept && (
-                                                                    <div className="text-xs text-zinc-600 mt-1">
-                                                                        {
-                                                                            movement.platformMethod
-                                                                        }
-                                                                    </div>
-                                                                )}
                                                         </td>
 
                                                         <td className="px-4 py-4 text-zinc-500">
@@ -3336,10 +3456,17 @@ function Reconciliation({
                                                         </td>
 
                                                         <td className="px-4 py-4">
+                                                            {movement.proofImage ? (
+                                                                <button type="button" onClick={() => setProofImagePreview(movement.proofImage ?? null)} className="block rounded-md focus:outline-none focus:ring-2 focus:ring-amber-400" aria-label="Ver comprobante"><img src={movement.proofImage} alt="Comprobante del movimiento" className="h-12 w-16 rounded-md border border-zinc-700 object-cover" /></button>
+                                                            ) : <span className="text-zinc-600">—</span>}
+                                                        </td>
+
+                                                        <td className="px-4 py-4">
 
                                                             <div className="flex items-center gap-3">
 
                                                                 <button
+                                                                    disabled={reconciliationView === 'range'}
                                                                     onClick={() =>
                                                                         toggleProblem(
                                                                             movement,
@@ -3353,6 +3480,7 @@ function Reconciliation({
                                                                 </button>
 
                                                                 <button
+                                                                    disabled={reconciliationView === 'range'}
                                                                     onClick={() =>
                                                                         deleteReconciliationMovement(
                                                                             movement,
@@ -3382,6 +3510,15 @@ function Reconciliation({
                     </div>
                 </>
             ) : null}
+
+            {proofImagePreview && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/85 p-4" onClick={() => setProofImagePreview(null)}>
+                    <div className="relative max-h-[90vh] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+                        <button type="button" onClick={() => setProofImagePreview(null)} className="absolute -right-3 -top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-white" aria-label="Cerrar imagen">×</button>
+                        <img src={proofImagePreview} alt="Comprobante ampliado" className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain" />
+                    </div>
+                </div>
+            )}
 
             {/* ===================================================== */}
             {/* MODAL IMPORTAR */}
@@ -3746,43 +3883,8 @@ function Reconciliation({
 
                             <div>
 
-                                <label className="block text-sm text-zinc-400 mb-2">
-                                    Concepto
-                                </label>
-
-                                <input
-                                    value={
-                                        manualConcept
-                                    }
-                                    onChange={e =>
-                                        setManualConcept(
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="Ej. Transferencia de la dueña"
-                                    className="w-full h-11 rounded-lg bg-zinc-900 border border-zinc-800 px-4 text-sm text-white outline-none"
-                                />
-
-                            </div>
-
-                            <div>
-
-                                <label className="block text-sm text-zinc-400 mb-2">
-                                    Descripción
-                                </label>
-
-                                <input
-                                    value={
-                                        manualDescription
-                                    }
-                                    onChange={e =>
-                                        setManualDescription(
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="Ej. Dinero enviado a la cuenta"
-                                    className="w-full h-11 rounded-lg bg-zinc-900 border border-zinc-800 px-4 text-sm text-white outline-none"
-                                />
+                                <label className="block text-sm text-zinc-400 mb-2">Nombre de usuario</label>
+                                <input value={manualUser} onChange={e => setManualUser(e.target.value)} placeholder="Usuario de la plataforma" className="w-full h-11 rounded-lg bg-zinc-900 border border-zinc-800 px-4 text-sm text-white outline-none" />
 
                             </div>
 
@@ -3837,7 +3939,7 @@ function Reconciliation({
                             <div>
 
                                 <label className="block text-sm text-zinc-400 mb-2">
-                                    Referencia / comprobante
+                                    Referencia
                                 </label>
 
                                 <input
@@ -3886,26 +3988,13 @@ function Reconciliation({
                             </div>
 
                             <div>
-
-                                <label className="block text-sm text-zinc-400 mb-2">
-                                    Observaciones
-                                </label>
-
-                                <textarea
-                                    value={
-                                        manualObservations
-                                    }
-                                    onChange={e =>
-                                        setManualObservations(
-                                            e.target.value,
-                                        )
-                                    }
-                                    placeholder="Opcional"
-                                    rows={3}
-                                    className="w-full rounded-lg bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm text-white outline-none resize-none"
-                                />
-
+                                <label className="block text-sm text-zinc-400 mb-2">Imagen de comprobante (seleccionar o pegar · máx. 2 MB)</label>
+                                <input type="file" accept="image/*" onChange={e => handleProofImageFile(e.target.files?.[0])} className="w-full text-sm text-zinc-400 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-zinc-200" />
+                                <p className="mt-2 text-xs text-zinc-500">También puedes pegarla con Ctrl+V mientras el formulario está abierto.</p>
+                                {manualProofImage && <img src={manualProofImage} alt="Vista previa del comprobante" className="mt-3 max-h-32 rounded-lg border border-zinc-800" />}
                             </div>
+
+                            {manualSaveError && <p role="alert" className="text-sm text-red-400">No se pudo guardar el movimiento: {manualSaveError}</p>}
 
                         </div>
 
@@ -3931,7 +4020,7 @@ function Reconciliation({
                                 }
                                 disabled={
                                     savingManual ||
-                                    !manualConcept.trim() ||
+                                    !manualUser.trim() ||
                                     !(Number(
                                         manualAmount,
                                     ) > 0)
